@@ -73,9 +73,16 @@ export default function CompletenessCard({ report, onFixField }: CompletenessCar
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-slate-800">{field.label}</p>
-                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">{field.fillHint}</p>
+                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                      {field.fillHint}
+                      {!["description", "location", "ward"].includes(field.id) && (
+                        <span className="block mt-1 text-blue-700 font-medium">
+                          You can add this in the editable summary below.
+                        </span>
+                      )}
+                    </p>
                   </div>
-                  {onFixField && ["description", "location", "ward", "landmark", "timeline"].includes(field.id) && (
+                  {onFixField && ["description", "location", "ward"].includes(field.id) && (
                     <button
                       type="button"
                       onClick={() => onFixField(field.id)}

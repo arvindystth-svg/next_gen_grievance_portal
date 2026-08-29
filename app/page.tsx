@@ -322,7 +322,7 @@ export default function Home() {
 
   const handleFixCompletenessField = (fieldId: string) => {
     if (fieldId === "location" || fieldId === "ward") goToStep(2);
-    else if (fieldId === "description" || fieldId === "landmark" || fieldId === "timeline") goToStep(1);
+    else if (fieldId === "description") goToStep(1);
   };
 
   const handleContinueToLocation = () => {
