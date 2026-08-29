@@ -255,6 +255,8 @@ export default function Home() {
   const [supplementalDetails, setSupplementalDetails] = useState<SupplementalDetails>({});
   const [analysisSnapshot, setAnalysisSnapshot] = useState<AnalysisSnapshot | null>(null);
   const [formSessionKey, setFormSessionKey] = useState(0);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodeFailed, setGeocodeFailed] = useState(false);
 
   useEffect(() => {
     setComplaints(getComplaintHistory());
@@ -298,8 +300,7 @@ export default function Home() {
       setSelectedLocalDepartments(result.localDepartments);
       setSelectedCpgramsCategories(result.cpgramsCategories);
       if (!areaManuallySet.current) {
-        const extracted = extractAreaFromText(`${grievanceText}\n${editedSummary}`);
-        if (extracted) applySelectedArea(extracted);
+        void geocodeComplaintLocation(`${grievanceText}\n${editedSummary}`);
       }
       setAnalysisResult((prev) =>
         prev
@@ -343,6 +344,7 @@ export default function Home() {
       supplemental: scoringSupplemental,
       aiMissing: analysisResult.missing_details_advisory.is_missing,
       aiObservation: analysisResult.missing_details_advisory.observation,
+      wardAutoFillFailed: geocodeFailed && !areaManuallySet.current,
     });
   }, [
     grievanceText,
@@ -352,16 +354,22 @@ export default function Home() {
     selectedLocalDepartments,
     scoringSupplemental,
     analysisResult,
+    geocodeFailed,
   ]);
 
   const handleDetailChange = (id: SupplementalDetailId, value: string) => {
     setSupplementalDetails((prev) => ({ ...prev, [id]: value }));
   };
 
-  const handleDetailBlur = (id: SupplementalDetailId, value: string) => {
-    if (id === "ward" && value.trim().length >= 4) {
-      const extracted = extractAreaFromText(value);
-      if (extracted) applySelectedArea(extracted);
+  const handleDetailBlur = async (id: SupplementalDetailId, value: string) => {
+    if (id === "ward" && value.trim().length >= 3) {
+      const resolved = await geocodeComplaintLocation(value);
+      if (!resolved) {
+        const extracted = extractAreaFromText(value);
+        if (extracted) applySelectedArea(extracted, true);
+      } else {
+        areaManuallySet.current = true;
+      }
     }
   };
 
@@ -386,9 +394,57 @@ export default function Home() {
     handleAnalyze();
   };
 
+  const geocodeComplaintLocation = async (
+    text: string,
+    aiLocation?: { locality?: string; ward?: string }
+  ): Promise<boolean> => {
+    if (!text.trim() || areaManuallySet.current) return false;
+
+    setIsGeocoding(true);
+    try {
+      const res = await fetch("/api/geocode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          aiLocality: aiLocation?.locality,
+          aiWard: aiLocation?.ward,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.resolved && !areaManuallySet.current) {
+        applySelectedArea({
+          ward: data.ward,
+          zone: data.zone,
+          locality: data.locality,
+        });
+        setLocation({
+          lat: data.lat,
+          lng: data.lng,
+          ward: data.ward,
+          zone: data.zone,
+          locality: data.locality,
+          source: "nlp",
+        });
+        setGeocodeFailed(false);
+        return true;
+      }
+
+      setGeocodeFailed(true);
+      return false;
+    } catch {
+      setGeocodeFailed(true);
+      return false;
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
   const applySelectedArea = (area: { ward: string; zone: string; locality: string }, manual = false) => {
     if (manual) areaManuallySet.current = true;
     setSelectedArea(area);
+    setGeocodeFailed(false);
     setSupplementalDetails((prev) => ({
       ...prev,
       ward: `${area.locality} · ${area.ward}`,
@@ -510,19 +566,13 @@ export default function Home() {
       setSelectedCpgramsCategories(cpgramsCats);
       lastAutoRoutedSummary.current = data.summary;
       areaManuallySet.current = false;
-      const extracted =
-        extractAreaFromText(`${grievanceText}\n${data.summary}`) ||
-        (data.location.ward
-          ? {
-              ward: data.location.ward,
-              zone: data.location.zone,
-              locality: data.location.locality,
-            }
-          : null);
-      if (extracted) applySelectedArea(extracted);
+      setGeocodeFailed(false);
+      const geoResolved = await geocodeComplaintLocation(`${grievanceText}\n${data.summary}`, {
+        locality: data.location.locality,
+        ward: data.location.ward,
+      });
 
-      // If AI extracted coordinates, suggest optional pin
-      if (data.location.latitude && data.location.longitude && !location) {
+      if (!geoResolved && data.location.latitude && data.location.longitude) {
         const sugLoc = {
           lat: data.location.latitude,
           lng: data.location.longitude,
@@ -598,6 +648,8 @@ export default function Home() {
     setMaxStepReached(1);
     lastAutoRoutedSummary.current = null;
     setFormSessionKey((k) => k + 1);
+    setGeocodeFailed(false);
+    setIsGeocoding(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -633,13 +685,15 @@ export default function Home() {
         </div>
 
         {activeView === "file" && step !== 4 && (
-          <StepIndicator
-            current={step}
-            maxReached={maxStepReached}
-            isAnalyzing={isAnalyzing}
-            isSubmitted={false}
-            onStepClick={goToStep}
-          />
+          <div className="sticky top-16 z-40 -mx-4 px-4 py-3 mb-4 bg-slate-100/95 backdrop-blur-md border-b border-slate-200/70 shadow-sm">
+            <StepIndicator
+              current={step}
+              maxReached={maxStepReached}
+              isAnalyzing={isAnalyzing}
+              isSubmitted={false}
+              onStepClick={goToStep}
+            />
+          </div>
         )}
 
         {/* View tabs */}
@@ -750,17 +804,7 @@ export default function Home() {
               onClick={() => goToStep(1)}
             />
 
-            {completenessReport && (
-              <CompletenessCard
-                report={completenessReport}
-                supplementalDetails={supplementalDetails}
-                onDetailChange={handleDetailChange}
-                onDetailBlur={handleDetailBlur}
-                onFixField={handleFixCompletenessField}
-              />
-            )}
-
-            {/* AI Analysis — compact review */}
+            {/* AI Summary first */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
@@ -785,12 +829,18 @@ export default function Home() {
                 className="w-full px-3 py-2.5 text-sm border border-blue-200 bg-blue-50/50 rounded-lg focus:border-blue-500 focus:outline-none resize-none text-slate-800 focus:bg-white transition-colors"
               />
               <p className="text-[10px] text-slate-400 mt-1">
-                Edit to refine — routing updates automatically.
+                Edit to refine — routing and location detection update automatically.
               </p>
               {routingUpdated && (
                 <p className="text-[10px] text-green-600 mt-1 flex items-center gap-1">
                   <CheckCircle2 size={10} />
                   Routing updated
+                </p>
+              )}
+              {isGeocoding && (
+                <p className="text-[10px] text-blue-600 mt-1 flex items-center gap-1">
+                  <Loader2 size={10} className="animate-spin" />
+                  Detecting ward from your complaint…
                 </p>
               )}
 
@@ -807,6 +857,16 @@ export default function Home() {
               </div>
             </div>
 
+            {completenessReport && (
+              <CompletenessCard
+                report={completenessReport}
+                supplementalDetails={supplementalDetails}
+                onDetailChange={handleDetailChange}
+                onDetailBlur={handleDetailBlur}
+                onFixField={handleFixCompletenessField}
+              />
+            )}
+
             {/* Area & optional pinpoint */}
             <div
               ref={areaSectionRef}
@@ -818,7 +878,9 @@ export default function Home() {
                   Affected Area
                 </h3>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  Ward auto-fills from your complaint. Map pin is optional.
+                  {geocodeFailed
+                    ? "Could not auto-detect ward — please search and select below."
+                    : "Ward auto-filled via geocoding when an area is mentioned in your complaint."}
                 </p>
               </div>
               <div className="p-4 space-y-4">

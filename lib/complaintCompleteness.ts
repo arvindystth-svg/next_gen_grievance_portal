@@ -1,4 +1,5 @@
 import { extractAreaFromText } from "./bengaluruAreas";
+import { isConfirmedWard } from "./geocoding";
 
 export interface CompletenessField {
   id: string;
@@ -76,6 +77,7 @@ interface AssessParams {
   supplemental?: SupplementalDetails;
   aiObservation?: string;
   aiMissing?: boolean;
+  wardAutoFillFailed?: boolean;
 }
 
 const LANDMARK_PATTERNS = [
@@ -258,9 +260,7 @@ function areaConfirmed(
 ): boolean {
   if (supplementalIsValid("ward", supplemental)) return true;
   const ward = selectedArea?.ward || location?.ward;
-  if (!ward) return false;
-  const w = ward.toLowerCase();
-  return !w.includes("to be confirmed") && !w.includes("unknown");
+  return isConfirmedWard(ward);
 }
 
 export function assessComplaintCompleteness(params: AssessParams): CompletenessReport {
@@ -288,7 +288,9 @@ export function assessComplaintCompleteness(params: AssessParams): CompletenessR
   fields.push({
     id: "ward",
     label: "Ward & locality",
-    fillHint: "Which ward or neighbourhood is affected?",
+    fillHint: params.wardAutoFillFailed
+      ? "We could not auto-detect your ward from the complaint. Search your ward/locality below or type it here."
+      : "Which ward or neighbourhood is affected?",
     completed: areaConfirmed(params.selectedArea, params.location, supplemental),
     weight: utilityNeeded ? 25 : 27,
     interactive: true,
