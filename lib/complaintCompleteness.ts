@@ -91,12 +91,15 @@ const LANDMARK_PATTERNS = [
 const TIMELINE_PATTERNS = [
   /\b(since|for|past|last)\s+\d+\s+(day|week|month|hour)/i,
   /\b\d+\s+(days?|weeks?|months?|hours?)\s+(ago|back)/i,
+  /\b\d+\s+(days?|weeks?|months?)\b/i,
   /\b(yesterday|today|this\s+morning|last\s+night)\b/i,
   /\bstarted\s+on\b/i,
   /\b(last|past)\s+(week|month|few\s+days?)\b/i,
   /\bfor\s+(a|one|two|three|several)\s+(day|week|month)/i,
   /\b(week|month)\s+ago\b/i,
   /\brecent(ly)?\b/i,
+  /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+  /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\b/i,
 ];
 
 const CONSUMER_ID_PATTERNS = [
@@ -150,11 +153,9 @@ function isGibberish(value: string): boolean {
   const trimmed = value.trim();
   if (!trimmed) return true;
   const compact = trimmed.replace(/\s+/g, "");
-  if (compact.length >= 5 && /^(.)\1+$/i.test(compact)) return true;
+  if (compact.length >= 6 && /^(.)\1+$/i.test(compact)) return true;
   const letters = trimmed.replace(/[^a-zA-Z]/g, "");
-  if (letters.length >= 8 && !/[aeiou]/i.test(letters)) return true;
-  const words = trimmed.split(/\s+/).filter(Boolean);
-  if (words.length === 1 && words[0].length < 12 && !/[aeiou]/i.test(words[0])) return true;
+  if (letters.length >= 10 && !/[aeiou]/i.test(letters)) return true;
   return false;
 }
 
@@ -164,32 +165,41 @@ function supplementalIsValid(id: SupplementalDetailId, supplemental?: Supplement
 
   switch (id) {
     case "description": {
-      if (val.length < 15) return false;
-      const words = val.split(/\s+/).filter(Boolean);
-      return words.length >= 3 && !isGibberish(val);
+      if (val.length < 10 || isGibberish(val)) return false;
+      return val.split(/\s+/).filter(Boolean).length >= 2;
     }
     case "ward":
       if (val.length < 3 || isGibberish(val)) return false;
       return Boolean(
         extractAreaFromText(val) ||
           /\bward\s*\d+/i.test(val) ||
-          /\blocalit(y|ies)\b/i.test(val) ||
-          /\b(nagar|layout|road|main|cross|block)\b/i.test(val)
+          /\b(locality|localities|nagar|layout|road|main|cross|block|colony|circle)\b/i.test(val) ||
+          val.split(/\s+/).length >= 2
       );
     case "landmark": {
-      if (val.length < 6 || isGibberish(val)) return false;
+      if (val.length < 4 || isGibberish(val)) return false;
       if (LANDMARK_PATTERNS.some((p) => p.test(val))) return true;
       if (extractAreaFromText(val)) return true;
-      const words = val.split(/\s+/).filter((w) => w.length > 2);
-      return words.length >= 2;
+      return val.split(/\s+/).filter((w) => w.length > 2).length >= 1;
     }
     case "timeline":
+      if (val.length < 3 || isGibberish(val)) return false;
       return TIMELINE_PATTERNS.some((p) => p.test(val));
     case "consumer_id":
-      return /\d{4,}/.test(val) || CONSUMER_ID_PATTERNS.some((p) => p.test(val));
+      return /\d{3,}/.test(val) || CONSUMER_ID_PATTERNS.some((p) => p.test(val));
     default:
       return false;
   }
+}
+
+/** Build supplemental map used for scoring from any non-empty citizen inputs. */
+export function buildScoringSupplemental(details: SupplementalDetails): SupplementalDetails {
+  const result: SupplementalDetails = {};
+  (Object.keys(details) as SupplementalDetailId[]).forEach((key) => {
+    const val = details[key]?.trim();
+    if (val) result[key] = val;
+  });
+  return result;
 }
 
 export type SupplementalValidationStatus = "empty" | "pending" | "valid";
@@ -291,10 +301,7 @@ export function assessComplaintCompleteness(params: AssessParams): CompletenessR
       params.aiObservation && params.aiMissing
         ? params.aiObservation
         : "A nearby landmark or street helps crews find the spot — optional for area-wide issues.",
-    completed:
-      hasLandmark(text, supplemental) ||
-      params.aiMissing === false ||
-      areaConfirmed(params.selectedArea, params.location, supplemental),
+    completed: hasLandmark(text, supplemental),
     weight: utilityNeeded ? 15 : 17,
     interactive: true,
   });

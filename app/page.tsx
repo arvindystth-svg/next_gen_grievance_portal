@@ -10,7 +10,7 @@ import CompletenessCard from "@/components/CompletenessCard";
 import AnalysisLoading from "@/components/AnalysisLoading";
 import WardAreaSelector from "@/components/WardAreaSelector";
 import RoutingPanel from "@/components/RoutingPanel";
-import { assessComplaintCompleteness, SupplementalDetailId, SupplementalDetails, formatSupplementalForSummary } from "@/lib/complaintCompleteness";
+import { assessComplaintCompleteness, SupplementalDetailId, SupplementalDetails, formatSupplementalForSummary, buildScoringSupplemental } from "@/lib/complaintCompleteness";
 import { extractAreaFromText } from "@/lib/bengaluruAreas";
 import {
   LOCAL_DEPARTMENTS,
@@ -252,7 +252,6 @@ export default function Home() {
     zone: string;
     locality: string;
   } | null>(null);
-  const [enabledDetails, setEnabledDetails] = useState<Partial<Record<SupplementalDetailId, boolean>>>({});
   const [supplementalDetails, setSupplementalDetails] = useState<SupplementalDetails>({});
   const [analysisSnapshot, setAnalysisSnapshot] = useState<AnalysisSnapshot | null>(null);
   const [formSessionKey, setFormSessionKey] = useState(0);
@@ -328,15 +327,10 @@ export default function Home() {
     setStep(target);
   };
 
-  const effectiveSupplemental = useMemo(() => {
-    const result: SupplementalDetails = {};
-    (Object.keys(enabledDetails) as SupplementalDetailId[]).forEach((key) => {
-      if (enabledDetails[key]) {
-        result[key] = supplementalDetails[key] ?? "";
-      }
-    });
-    return result;
-  }, [enabledDetails, supplementalDetails]);
+  const scoringSupplemental = useMemo(
+    () => buildScoringSupplemental(supplementalDetails),
+    [supplementalDetails]
+  );
 
   const completenessReport = useMemo(() => {
     if (!analysisResult) return null;
@@ -346,7 +340,7 @@ export default function Home() {
       location,
       selectedArea,
       selectedLocalDepartments,
-      supplemental: effectiveSupplemental,
+      supplemental: scoringSupplemental,
       aiMissing: analysisResult.missing_details_advisory.is_missing,
       aiObservation: analysisResult.missing_details_advisory.observation,
     });
@@ -356,20 +350,9 @@ export default function Home() {
     location,
     selectedArea,
     selectedLocalDepartments,
-    effectiveSupplemental,
+    scoringSupplemental,
     analysisResult,
   ]);
-
-  const handleToggleDetail = (id: SupplementalDetailId, enabled: boolean) => {
-    setEnabledDetails((prev) => ({ ...prev, [id]: enabled }));
-    if (!enabled) {
-      setSupplementalDetails((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-    }
-  };
 
   const handleDetailChange = (id: SupplementalDetailId, value: string) => {
     setSupplementalDetails((prev) => ({ ...prev, [id]: value }));
@@ -406,6 +389,10 @@ export default function Home() {
   const applySelectedArea = (area: { ward: string; zone: string; locality: string }, manual = false) => {
     if (manual) areaManuallySet.current = true;
     setSelectedArea(area);
+    setSupplementalDetails((prev) => ({
+      ...prev,
+      ward: `${area.locality} · ${area.ward}`,
+    }));
     setAnalysisResult((prev) =>
       prev
         ? {
@@ -569,7 +556,7 @@ export default function Home() {
         id,
         raisedAt: new Date().toISOString(),
         rawText: grievanceText,
-        aiSummary: editedSummary + formatSupplementalForSummary(effectiveSupplemental),
+        aiSummary: editedSummary + formatSupplementalForSummary(scoringSupplemental),
         status: "Submitted",
         localDepartments: selectedLocalDepartments.length
           ? selectedLocalDepartments
@@ -605,7 +592,6 @@ export default function Home() {
     setSelectedLocalDepartments([]);
     setSelectedCpgramsCategories([]);
     setSelectedArea(null);
-    setEnabledDetails({});
     setSupplementalDetails({});
     areaManuallySet.current = false;
     setAnalysisSnapshot(null);
@@ -767,9 +753,7 @@ export default function Home() {
             {completenessReport && (
               <CompletenessCard
                 report={completenessReport}
-                enabledDetails={enabledDetails}
                 supplementalDetails={supplementalDetails}
-                onToggleDetail={handleToggleDetail}
                 onDetailChange={handleDetailChange}
                 onDetailBlur={handleDetailBlur}
                 onFixField={handleFixCompletenessField}
