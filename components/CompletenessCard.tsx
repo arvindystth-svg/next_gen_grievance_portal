@@ -14,6 +14,7 @@ interface CompletenessCardProps {
   supplementalDetails: SupplementalDetails;
   onToggleDetail: (id: SupplementalDetailId, enabled: boolean) => void;
   onDetailChange: (id: SupplementalDetailId, value: string) => void;
+  onDetailBlur?: (id: SupplementalDetailId, value: string) => void;
   onFixField?: (fieldId: string) => void;
 }
 
@@ -39,9 +40,22 @@ export default function CompletenessCard({
   supplementalDetails,
   onToggleDetail,
   onDetailChange,
+  onDetailBlur,
   onFixField,
 }: CompletenessCardProps) {
-  const { score, missing, completed } = report;
+  const { score, missing, completed, fields } = report;
+
+  const interactiveToShow = fields.filter(
+    (f): f is CompletenessReport["fields"][number] & { id: SupplementalDetailId } =>
+      isInteractiveFieldId(f.id) && (!f.completed || Boolean(enabledDetails[f.id]))
+  );
+
+  const nonInteractiveMissing = missing.filter((f) => !isInteractiveFieldId(f.id));
+
+  const providedDisplay = completed.filter((f) => {
+    if (isInteractiveFieldId(f.id) && enabledDetails[f.id]) return false;
+    return true;
+  });
 
   return (
     <div
@@ -78,36 +92,14 @@ export default function CompletenessCard({
         </div>
       </div>
 
-      {missing.length > 0 && (
+      {interactiveToShow.length > 0 && (
         <div className="px-5 py-4 space-y-3">
           <p className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
             <AlertCircle size={13} className="text-amber-600" />
-            Missing details ({missing.length})
+            Add missing details
           </p>
           <ul className="space-y-3">
-            {missing.map((field) => {
-              if (!isInteractiveFieldId(field.id)) {
-                return (
-                  <li
-                    key={field.id}
-                    className="bg-white/80 border border-white rounded-xl px-4 py-3"
-                  >
-                    <p className="text-sm font-semibold text-slate-800">{field.label}</p>
-                    <p className="text-xs text-slate-600 mt-1">{field.fillHint}</p>
-                    {onFixField && (
-                      <button
-                        type="button"
-                        onClick={() => onFixField(field.id)}
-                        className="mt-2 text-xs font-semibold text-[#1a3c6e] hover:underline flex items-center gap-0.5"
-                      >
-                        Go to routing section
-                        <ChevronRight size={12} />
-                      </button>
-                    )}
-                  </li>
-                );
-              }
-
+            {interactiveToShow.map((field) => {
               const detailId = field.id;
               const config = DETAIL_INPUT_CONFIG[detailId];
               const enabled = Boolean(enabledDetails[detailId]);
@@ -116,40 +108,61 @@ export default function CompletenessCard({
               return (
                 <li
                   key={field.id}
-                  className="bg-white/80 border border-white rounded-xl px-4 py-3"
+                  className={`bg-white/80 border rounded-xl px-4 py-3 ${
+                    field.completed ? "border-green-200" : "border-white"
+                  }`}
                 >
-                  <p className="text-sm font-semibold text-slate-800">{field.label}</p>
-                  <p className="text-xs text-slate-500 mt-0.5 mb-3">{field.fillHint}</p>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className="text-sm font-semibold text-slate-800">{field.label}</p>
+                    {field.completed && (
+                      <span className="text-[10px] font-bold text-green-600 bg-green-100 px-1.5 py-0.5 rounded-full">
+                        Added
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 mb-3">{field.fillHint}</p>
 
-                  <label className="flex items-start gap-2.5 cursor-pointer group">
+                  <div className="flex items-start gap-2.5">
                     <input
                       type="checkbox"
+                      id={`detail-check-${detailId}`}
                       checked={enabled}
                       onChange={(e) => onToggleDetail(detailId, e.target.checked)}
-                      className="mt-0.5 w-4 h-4 rounded border-slate-300 text-[#1a3c6e] focus:ring-blue-500"
+                      className="mt-0.5 w-4 h-4 rounded border-slate-300 text-[#1a3c6e] focus:ring-blue-500 flex-shrink-0"
                     />
-                    <span className="text-sm text-slate-700 group-hover:text-slate-900">
+                    <label
+                      htmlFor={`detail-check-${detailId}`}
+                      className="text-sm text-slate-700 cursor-pointer"
+                    >
                       Yes, I can provide this detail
-                    </span>
-                  </label>
+                    </label>
+                  </div>
 
                   {enabled && (
-                    <div className="mt-3 pl-6">
+                    <div className="mt-3 pl-6" onMouseDown={(e) => e.stopPropagation()}>
                       {config.multiline ? (
                         <textarea
                           value={value}
                           onChange={(e) => onDetailChange(detailId, e.target.value)}
+                          onBlur={(e) => onDetailBlur?.(detailId, e.target.value)}
                           placeholder={config.placeholder}
                           rows={3}
-                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 resize-none"
+                          autoComplete="off"
+                          inputMode="text"
+                          name={`supplemental-${detailId}`}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 resize-none text-slate-800"
                         />
                       ) : (
                         <input
                           type="text"
                           value={value}
                           onChange={(e) => onDetailChange(detailId, e.target.value)}
+                          onBlur={(e) => onDetailBlur?.(detailId, e.target.value)}
                           placeholder={config.placeholder}
-                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+                          autoComplete="off"
+                          inputMode="text"
+                          name={`supplemental-${detailId}`}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-slate-800"
                         />
                       )}
                     </div>
@@ -161,14 +174,35 @@ export default function CompletenessCard({
         </div>
       )}
 
-      {completed.length > 0 && (
-        <div className={`px-5 pb-4 ${missing.length > 0 ? "pt-1" : "pt-4"}`}>
+      {nonInteractiveMissing.length > 0 && (
+        <div className="px-5 py-4 space-y-2 border-t border-inherit">
+          {nonInteractiveMissing.map((field) => (
+            <div key={field.id} className="bg-white/80 border border-white rounded-xl px-4 py-3">
+              <p className="text-sm font-semibold text-slate-800">{field.label}</p>
+              <p className="text-xs text-slate-600 mt-1">{field.fillHint}</p>
+              {onFixField && (
+                <button
+                  type="button"
+                  onClick={() => onFixField(field.id)}
+                  className="mt-2 text-xs font-semibold text-[#1a3c6e] hover:underline flex items-center gap-0.5"
+                >
+                  Go to routing section
+                  <ChevronRight size={12} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {providedDisplay.length > 0 && (
+        <div className={`px-5 pb-4 ${interactiveToShow.length > 0 || nonInteractiveMissing.length > 0 ? "pt-1" : "pt-4"}`}>
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
             <CheckCircle2 size={13} className="text-green-600" />
-            Provided ({completed.length})
+            Provided ({providedDisplay.length})
           </p>
           <div className="flex flex-wrap gap-1.5">
-            {completed.map((field) => (
+            {providedDisplay.map((field) => (
               <span
                 key={field.id}
                 className="text-[10px] font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full"

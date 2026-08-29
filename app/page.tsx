@@ -7,6 +7,7 @@ import VoiceTextRecorder from "@/components/VoiceTextRecorder";
 import DuplicateBanner from "@/components/DuplicateBanner";
 import ComplaintHistory from "@/components/ComplaintHistory";
 import CompletenessCard from "@/components/CompletenessCard";
+import AnalysisLoading from "@/components/AnalysisLoading";
 import DepartmentSelector from "@/components/DepartmentSelector";
 import WardAreaSelector from "@/components/WardAreaSelector";
 import { assessComplaintCompleteness, SupplementalDetailId, SupplementalDetails, formatSupplementalForSummary } from "@/lib/complaintCompleteness";
@@ -89,6 +90,11 @@ interface AnalysisResult {
 
 type Step = 1 | 2 | 3 | 4;
 type ActiveView = "file" | "history";
+
+interface AnalysisSnapshot {
+  grievanceText: string;
+  language: string;
+}
 
 function findDuplicate(
   text: string,
@@ -246,6 +252,7 @@ export default function Home() {
   } | null>(null);
   const [enabledDetails, setEnabledDetails] = useState<Partial<Record<SupplementalDetailId, boolean>>>({});
   const [supplementalDetails, setSupplementalDetails] = useState<SupplementalDetails>({});
+  const [analysisSnapshot, setAnalysisSnapshot] = useState<AnalysisSnapshot | null>(null);
 
   useEffect(() => {
     setComplaints(getComplaintHistory());
@@ -363,10 +370,34 @@ export default function Home() {
 
   const handleDetailChange = (id: SupplementalDetailId, value: string) => {
     setSupplementalDetails((prev) => ({ ...prev, [id]: value }));
-    if (id === "ward" && value.trim().length >= 3) {
+  };
+
+  const handleDetailBlur = (id: SupplementalDetailId, value: string) => {
+    if (id === "ward" && value.trim().length >= 10) {
       const extracted = extractAreaFromText(value);
       if (extracted) applySelectedArea(extracted);
     }
+  };
+
+  const canSkipReanalysis = (): boolean =>
+    Boolean(
+      analysisResult &&
+        analysisSnapshot &&
+        analysisSnapshot.grievanceText === grievanceText.trim() &&
+        analysisSnapshot.language === language
+    );
+
+  const handleContinueFromDescribe = () => {
+    if (!grievanceText.trim() || grievanceText.trim().length < 10) {
+      setAnalysisError("Please describe your grievance in at least 10 characters.");
+      return;
+    }
+    if (canSkipReanalysis()) {
+      setAnalysisError(null);
+      setStep(3);
+      return;
+    }
+    handleAnalyze();
   };
 
   const applySelectedArea = (area: { ward: string; zone: string; locality: string }, manual = false) => {
@@ -449,6 +480,11 @@ export default function Home() {
       setAnalysisError("Please describe your grievance in at least 10 characters.");
       return;
     }
+    if (canSkipReanalysis()) {
+      setAnalysisError(null);
+      setStep(3);
+      return;
+    }
     setIsAnalyzing(true);
     setAnalysisError(null);
     setStep(2);
@@ -510,6 +546,7 @@ export default function Home() {
 
       setStep(3);
       setMaxStepReached((m) => (m < 3 ? 3 : m));
+      setAnalysisSnapshot({ grievanceText: grievanceText.trim(), language });
     } catch (err) {
       setAnalysisError(err instanceof Error ? err.message : "Unknown error occurred");
       setStep(1);
@@ -567,6 +604,7 @@ export default function Home() {
     setEnabledDetails({});
     setSupplementalDetails({});
     areaManuallySet.current = false;
+    setAnalysisSnapshot(null);
     setMaxStepReached(1);
     lastAutoRoutedSummary.current = null;
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -660,8 +698,9 @@ export default function Home() {
             )}
             {maxStepReached >= 3 && (
               <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700">
-                You returned to edit your complaint. Update your description, then continue to
-                refresh the AI summary and pin the location on the review step.
+                {canSkipReanalysis()
+                  ? "No changes to your description — you can continue straight to review without re-running AI analysis."
+                  : "You returned to edit your complaint. Update your description to refresh the AI summary."}
               </div>
             )}
             {/* Complaint description */}
@@ -691,45 +730,18 @@ export default function Home() {
 
             <button
               type="button"
-              onClick={handleAnalyze}
+              onClick={handleContinueFromDescribe}
               disabled={isAnalyzing || !grievanceText.trim() || grievanceText.trim().length < 10}
               className="w-full bg-[#1a3c6e] hover:bg-[#2563eb] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
             >
               <Sparkles size={18} />
-              Continue to AI Analysis
+              {canSkipReanalysis() ? "Continue to Review" : "Continue to AI Analysis"}
               <ChevronRight size={18} />
             </button>
           </div>
         )}
 
-        {activeView === "file" && step === 2 && isAnalyzing && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-10 text-center mt-4">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Sparkles size={28} className="text-blue-600 animate-pulse" />
-            </div>
-            <h3 className="font-bold text-slate-800 text-lg mb-2">Analyzing your grievance…</h3>
-            <p className="text-slate-500 text-sm mb-6">
-              AI is processing your complaint, detecting location, classifying department, and checking for duplicates.
-            </p>
-            <div className="space-y-2 text-left max-w-xs mx-auto">
-              {[
-                "🔍 Extracting location entities…",
-                "🏛️ Routing to correct department…",
-                "📋 Generating formal summary…",
-                "🔄 Checking for existing reports…",
-              ].map((msg, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 rounded-lg px-3 py-2"
-                  style={{ animationDelay: `${i * 200}ms` }}
-                >
-                  <Loader2 size={12} className="animate-spin text-blue-400 flex-shrink-0" />
-                  {msg}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {activeView === "file" && step === 2 && isAnalyzing && <AnalysisLoading />}
 
         {/* ── STEP 3: Review & Edit ─────────────────────────────────── */}
         {activeView === "file" && step === 3 && analysisResult && (
@@ -746,6 +758,7 @@ export default function Home() {
                 supplementalDetails={supplementalDetails}
                 onToggleDetail={handleToggleDetail}
                 onDetailChange={handleDetailChange}
+                onDetailBlur={handleDetailBlur}
                 onFixField={handleFixCompletenessField}
               />
             )}

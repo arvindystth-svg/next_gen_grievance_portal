@@ -115,18 +115,32 @@ function combinedText(
   return parts.join("\n").toLowerCase();
 }
 
+const SUPPLEMENTAL_MIN: Record<SupplementalDetailId, number> = {
+  description: 15,
+  ward: 10,
+  landmark: 8,
+  timeline: 8,
+  consumer_id: 8,
+};
+
+function supplementalMeetsMin(id: SupplementalDetailId, supplemental?: SupplementalDetails): boolean {
+  const val = supplemental?.[id]?.trim();
+  if (!val) return false;
+  return val.length >= SUPPLEMENTAL_MIN[id];
+}
+
 function hasLandmark(text: string, supplemental?: SupplementalDetails): boolean {
-  if (supplemental?.landmark && supplemental.landmark.trim().length >= 4) return true;
+  if (supplementalMeetsMin("landmark", supplemental)) return true;
   return LANDMARK_PATTERNS.some((p) => p.test(text));
 }
 
 function hasTimeline(text: string, supplemental?: SupplementalDetails): boolean {
-  if (supplemental?.timeline && supplemental.timeline.trim().length >= 4) return true;
+  if (supplementalMeetsMin("timeline", supplemental)) return true;
   return TIMELINE_PATTERNS.some((p) => p.test(text));
 }
 
 function hasConsumerId(text: string, supplemental?: SupplementalDetails): boolean {
-  if (supplemental?.consumer_id && supplemental.consumer_id.trim().length >= 4) return true;
+  if (supplementalMeetsMin("consumer_id", supplemental)) return true;
   return CONSUMER_ID_PATTERNS.some((p) => p.test(text));
 }
 
@@ -142,7 +156,7 @@ function areaConfirmed(
   location: LocationInput | null,
   supplemental?: SupplementalDetails
 ): boolean {
-  if (supplemental?.ward && supplemental.ward.trim().length >= 3) return true;
+  if (supplemental?.ward && supplemental.ward.trim().length >= 10) return true;
   const ward = selectedArea?.ward || location?.ward;
   if (!ward) return false;
   const w = ward.toLowerCase();
@@ -161,7 +175,7 @@ export function assessComplaintCompleteness(params: AssessParams): CompletenessR
     fillHint: "A clear description of what is wrong and how it affects you.",
     completed:
       params.grievanceText.trim().length >= 20 ||
-      Boolean(supplemental?.description && supplemental.description.trim().length >= 15),
+      supplementalMeetsMin("description", supplemental),
     weight: utilityNeeded ? 25 : 28,
     interactive: true,
   });

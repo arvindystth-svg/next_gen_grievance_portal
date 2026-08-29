@@ -70,6 +70,32 @@ body {
 .wave-bar:nth-child(6) { animation-delay: 0.2s; }
 .wave-bar:nth-child(7) { animation-delay: 0.1s; }
 
+@keyframes analysis-orbit {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes analysis-pulse-icon {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.08); opacity: 0.9; }
+}
+
+@keyframes analysis-dot-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+
+.analysis-orbit {
+  animation: analysis-orbit 1.2s linear infinite;
+}
+
+.analysis-pulse-icon {
+  animation: analysis-pulse-icon 1.6s ease-in-out infinite;
+}
+
+.analysis-dot {
+  animation: analysis-dot-bounce 1s ease-in-out infinite;
+}
+
 /* Step indicator */
 .step-connector {
   position: relative;
