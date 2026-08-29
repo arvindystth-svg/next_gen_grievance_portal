@@ -4,7 +4,7 @@ import {
   sarvamExtractLocation,
   sarvamAnalyzeGrievance,
 } from "@/lib/sarvam";
-import { mergeDepartmentRouting } from "@/lib/departmentDetection";
+import { resolveDepartmentRouting } from "@/lib/departmentDetection";
 
 interface AnalysisResult {
   summary: string;
@@ -44,10 +44,6 @@ Analyze the citizen's specific complaint text and return valid JSON with exactly
 
 {
   "summary": "Two to four formal sentences in official governance English. If the complaint covers multiple issues (roads, drainage, street lights, etc.), address each concisely in polished prose.",
-  "cpgrams_category": "Primary Central Ministry (most urgent issue)",
-  "cpgrams_categories": ["All relevant Central Ministries — include every ministry applicable to issues mentioned"],
-  "local_department": "Primary local body (most urgent issue)",
-  "local_departments": ["All responsible Bengaluru bodies — list EVERY department for issues mentioned, e.g. BBMP Roads, BBMP Storm Water Drains, BBMP Electrical, BESCOM, BWSSB"],
   "urgency": "HIGH | MEDIUM | LOW",
   "location": {
     "locality": "string",
@@ -67,10 +63,8 @@ Analyze the citizen's specific complaint text and return valid JSON with exactly
 }
 
 Classification rules:
-- If the complaint mentions MULTIPLE issues (e.g. roads AND drainage AND street lights), you MUST list ALL applicable departments in local_departments and ALL ministries in cpgrams_categories.
-- Base summary, departments, and urgency on the ACTUAL complaint topics mentioned.
-- cpgrams_category examples: Ministry of Power, Ministry of Housing and Urban Affairs, Ministry of Road Transport and Highways, Ministry of Jal Shakti.
-- local_department examples: BBMP Electrical, BBMP Storm Water Drains, BBMP Roads & Infrastructure, BBMP Solid Waste Management, BWSSB Water Supply, BESCOM.
+- Department routing is computed separately on the server — focus on an accurate summary, urgency, location, and keywords.
+- Base summary and urgency on the ACTUAL complaint topics mentioned (roads, speed breakers, drainage, street lights, water, garbage, etc.).
 - urgency HIGH for safety risks, hospital/school proximity, flooding, burst pipes, live wires; MEDIUM for service disruption; LOW for minor nuisances.
 - Use provided GPS/ward hints when available; otherwise infer locality and ward from complaint text.
 - missing_details_advisory.is_missing should be true when no landmark, address, or consumer ID is mentioned.
@@ -120,7 +114,7 @@ function normalizeAnalysis(
   ctx: LocationContext,
   citizenText: string
 ): AnalysisResult {
-  const departments = mergeDepartmentRouting(raw, citizenText);
+  const departments = resolveDepartmentRouting(citizenText);
 
   return {
     summary:
@@ -324,9 +318,15 @@ export async function POST(req: NextRequest) {
       modelUsed = "water-supply-mock-fallback";
     }
 
-    // Always merge keyword-detected departments so multi-issue complaints route correctly
-    const deptMerge = mergeDepartmentRouting(result, citizenText);
-    result = { ...result, ...deptMerge };
+    // Always apply deterministic department routing from citizen text
+    const routing = resolveDepartmentRouting(citizenText);
+    result = {
+      ...result,
+      local_department: routing.local_department,
+      local_departments: routing.local_departments,
+      cpgrams_category: routing.cpgrams_category,
+      cpgrams_categories: routing.cpgrams_categories,
+    };
 
     return NextResponse.json({
       ...result,
@@ -335,6 +335,7 @@ export async function POST(req: NextRequest) {
       pipeline,
       input_language: language || null,
       sarvam_enriched_location: Boolean(sarvamSteps.length),
+      matched_topics: routing.matched_topics,
     });
   } catch (err) {
     console.error("analyze-grievance error:", err);
