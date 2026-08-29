@@ -5,6 +5,14 @@ import {
   sarvamAnalyzeGrievance,
 } from "@/lib/sarvam";
 import { resolveDepartmentRouting } from "@/lib/departmentDetection";
+import { localHeuristicAnalysis } from "@/lib/localAnalysis";
+import { withTimeout } from "@/lib/withTimeout";
+
+/** Keep under typical browser/proxy timeouts (~10–15s). */
+const EXTERNAL_AI_TIMEOUT_MS = 4_000;
+const LOCATION_ENRICH_TIMEOUT_MS = 3_000;
+
+export const maxDuration = 30;
 
 interface AnalysisResult {
   summary: string;
@@ -71,36 +79,10 @@ Classification rules:
 - confidence is 0–100 reflecting how clearly the complaint was understood.
 - Return JSON only. No markdown or extra text.`;
 
-/** Hardcoded water-supply mock — used only when both OpenAI and Sarvam are unavailable or fail. */
-function waterSupplyMockFallback(ctx: LocationContext): AnalysisResult {
-  return {
-    summary:
-      "A water supply infrastructure failure has been reported in the Koramangala area. The complaint indicates a pipe burst or major leak requiring immediate BWSSB intervention to prevent water wastage and road damage.",
-    cpgrams_category: "Ministry of Housing and Urban Affairs",
-    cpgrams_categories: ["Ministry of Housing and Urban Affairs"],
-    local_department: "BBMP Engineering / BWSSB Water Supply",
-    local_departments: ["BBMP Engineering / BWSSB Water Supply"],
-    urgency: "HIGH",
-    location: {
-      locality: "Koramangala 4th Block",
-      ward: ctx.ward || "Ward 151 - Koramangala",
-      zone: ctx.zone || "South Zone",
-      latitude: ctx.lat ?? 12.9344,
-      longitude: ctx.lng ?? 77.6251,
-    },
-    missing_details_advisory: {
-      is_missing: false,
-      observation: "Landmark identified successfully.",
-      why_it_matters: "Specific landmarks allow quick dispatch of maintenance vans.",
-    },
-    confidence: 75,
-    keywords: ["water", "BWSSB", "supply"],
-    suggested_actions: [
-      "Dispatch BWSSB emergency repair crew",
-      "Shut off main valve at junction",
-      "Notify area engineer",
-    ],
-  };
+interface ExternalAnalysisOutcome {
+  result: AnalysisResult;
+  modelUsed: string;
+  pipeline: string[];
 }
 
 function normalizeUrgency(value: unknown): "HIGH" | "MEDIUM" | "LOW" {
@@ -252,6 +234,62 @@ async function sarvamAnalysis(
   return normalizeAnalysis(parsed as Partial<AnalysisResult>, ctx, citizenText);
 }
 
+async function runExternalAnalysis(
+  citizenText: string,
+  locationCtx: LocationContext,
+  openaiKey?: string,
+  sarvamKey?: string
+): Promise<ExternalAnalysisOutcome> {
+  const pipeline: string[] = [];
+  let ctx = locationCtx;
+
+  if (sarvamKey) {
+    try {
+      ctx = await withTimeout(
+        enrichLocationWithSarvam(citizenText, ctx, sarvamKey),
+        LOCATION_ENRICH_TIMEOUT_MS,
+        "Sarvam location extraction"
+      );
+      pipeline.push("location-extraction");
+    } catch (err) {
+      console.warn("Sarvam location enrichment skipped:", err);
+    }
+  }
+
+  if (openaiKey) {
+    try {
+      const result = await openAIAnalysis(citizenText, ctx, openaiKey);
+      return {
+        result,
+        modelUsed: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        pipeline: ["openai", ...pipeline],
+      };
+    } catch (openaiErr) {
+      console.error("OpenAI failed:", openaiErr);
+      if (sarvamKey) {
+        const result = await sarvamAnalysis(citizenText, ctx, sarvamKey);
+        return {
+          result,
+          modelUsed: process.env.SARVAM_MODEL?.trim() || "sarvam-105b-conversations",
+          pipeline: ["sarvam-fallback", ...pipeline],
+        };
+      }
+      throw openaiErr;
+    }
+  }
+
+  if (sarvamKey) {
+    const result = await sarvamAnalysis(citizenText, ctx, sarvamKey);
+    return {
+      result,
+      modelUsed: process.env.SARVAM_MODEL?.trim() || "sarvam-105b-conversations",
+      pipeline: ["sarvam", ...pipeline],
+    };
+  }
+
+  throw new Error("No AI provider configured");
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -265,57 +303,37 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let locationCtx: LocationContext = { lat, lng, ward, zone };
+    const locationCtx: LocationContext = { lat, lng, ward, zone };
     const openaiKey = process.env.OPENAI_API_KEY?.trim();
     const sarvamKey = getSarvamApiKey();
-    const sarvamSteps: string[] = [];
-
-    // Layer 3: Sarvam NLP spatial entity extraction
-    if (sarvamKey) {
-      locationCtx = await enrichLocationWithSarvam(citizenText, locationCtx, sarvamKey);
-      sarvamSteps.push("location-extraction");
-    }
+    const preferLocal =
+      process.env.ANALYSIS_MODE?.trim().toLowerCase() === "local" ||
+      process.env.USE_LOCAL_ANALYSIS?.trim() === "1";
 
     let result: AnalysisResult;
     let modelUsed: string;
-    const pipeline: string[] = [];
+    let pipeline: string[] = [];
 
-    if (openaiKey) {
-      try {
-        result = await openAIAnalysis(citizenText, locationCtx, openaiKey);
-        modelUsed = process.env.OPENAI_MODEL || "gpt-4o-mini";
-        pipeline.push("openai");
-        if (sarvamSteps.length) pipeline.push(...sarvamSteps);
-      } catch (openaiErr) {
-        console.error("OpenAI failed:", openaiErr);
-        if (sarvamKey) {
-          try {
-            result = await sarvamAnalysis(citizenText, locationCtx, sarvamKey);
-            modelUsed = process.env.SARVAM_MODEL?.trim() || "sarvam-105b-conversations";
-            pipeline.push("sarvam-fallback", ...sarvamSteps);
-          } catch (sarvamErr) {
-            console.error("Sarvam analysis also failed, using water-supply mock:", sarvamErr);
-            result = waterSupplyMockFallback(locationCtx);
-            modelUsed = "water-supply-mock-fallback";
-          }
-        } else {
-          result = waterSupplyMockFallback(locationCtx);
-          modelUsed = "water-supply-mock-fallback";
-        }
-      }
-    } else if (sarvamKey) {
-      try {
-        result = await sarvamAnalysis(citizenText, locationCtx, sarvamKey);
-        modelUsed = process.env.SARVAM_MODEL?.trim() || "sarvam-105b-conversations";
-        pipeline.push("sarvam", ...sarvamSteps);
-      } catch (sarvamErr) {
-        console.error("Sarvam analysis failed, using water-supply mock:", sarvamErr);
-        result = waterSupplyMockFallback(locationCtx);
-        modelUsed = "water-supply-mock-fallback";
-      }
+    if (preferLocal || (!openaiKey && !sarvamKey)) {
+      result = localHeuristicAnalysis(citizenText, locationCtx);
+      modelUsed = "local-heuristic";
+      pipeline = ["local-heuristic"];
     } else {
-      result = waterSupplyMockFallback(locationCtx);
-      modelUsed = "water-supply-mock-fallback";
+      try {
+        const external = await withTimeout(
+          runExternalAnalysis(citizenText, locationCtx, openaiKey, sarvamKey),
+          EXTERNAL_AI_TIMEOUT_MS,
+          "AI analysis"
+        );
+        result = external.result;
+        modelUsed = external.modelUsed;
+        pipeline = external.pipeline;
+      } catch (err) {
+        console.warn("External AI unavailable or timed out, using local heuristic:", err);
+        result = localHeuristicAnalysis(citizenText, locationCtx);
+        modelUsed = "local-heuristic";
+        pipeline = ["local-heuristic", "external-timeout-or-error"];
+      }
     }
 
     // Always apply deterministic department routing from citizen text
@@ -334,7 +352,7 @@ export async function POST(req: NextRequest) {
       model: modelUsed,
       pipeline,
       input_language: language || null,
-      sarvam_enriched_location: Boolean(sarvamSteps.length),
+      sarvam_enriched_location: pipeline.includes("location-extraction"),
       matched_topics: routing.matched_topics,
     });
   } catch (err) {
@@ -356,7 +374,7 @@ export async function GET() {
     models.push("sarvam-saaras-v3 (STT)");
     models.push(process.env.SARVAM_MODEL?.trim() || "sarvam-105b-conversations (NLP)");
   }
-  if (!models.length) models.push("water-supply-mock-fallback");
+  if (!models.length) models.push("local-heuristic");
 
   return NextResponse.json({
     status: "ok",

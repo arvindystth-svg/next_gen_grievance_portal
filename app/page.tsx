@@ -851,7 +851,13 @@ function HomeContent() {
       applyAutoFillFromComplaint(grievanceText, data.summary);
       setAnalysisSnapshot({ grievanceText: grievanceText.trim(), language });
     } catch (err) {
-      setAnalysisError(err instanceof Error ? err.message : "Unknown error occurred");
+      const message =
+        err instanceof TypeError && /fetch/i.test(err.message)
+          ? "Could not reach the analysis service. Check your connection and try again."
+          : err instanceof Error
+          ? err.message
+          : "Unknown error occurred";
+      setAnalysisError(message);
       setStep(1);
     } finally {
       setIsAnalyzing(false);
