@@ -75,14 +75,14 @@ export default function CompletenessCard({ report, onFixField }: CompletenessCar
                     <p className="text-sm font-semibold text-slate-800">{field.label}</p>
                     <p className="text-xs text-slate-600 mt-1 leading-relaxed">
                       {field.fillHint}
-                      {!["description", "location", "ward"].includes(field.id) && (
+                      {!["description", "ward", "landmark"].includes(field.id) && (
                         <span className="block mt-1 text-blue-700 font-medium">
                           You can add this in the editable summary below.
                         </span>
                       )}
                     </p>
                   </div>
-                  {onFixField && ["description", "location", "ward"].includes(field.id) && (
+                  {onFixField && ["description", "ward", "landmark"].includes(field.id) && (
                     <button
                       type="button"
                       onClick={() => onFixField(field.id)}

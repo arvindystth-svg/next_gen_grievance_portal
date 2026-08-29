@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { MapPin, Navigation, Camera, Loader2, CheckCircle2 } from "lucide-react";
 import { BENGALURU_CENTER } from "@/lib/seedData";
+import { getWardForCoordinates } from "@/lib/bengaluruAreas";
 
 interface LocationData {
   lat: number;
@@ -17,36 +18,6 @@ interface LocationPickerProps {
   location: LocationData | null;
   onLocationChange: (loc: LocationData) => void;
   suggestedLocation?: { lat: number; lng: number; ward?: string; zone?: string; locality?: string } | null;
-}
-
-const WARD_BOUNDARIES: Array<{
-  name: string;
-  zone: string;
-  lat: number;
-  lng: number;
-  radius: number;
-  locality: string;
-}> = [
-  { name: "Ward 151 - Koramangala", zone: "South Zone", lat: 12.9344, lng: 77.6251, radius: 0.025, locality: "Koramangala" },
-  { name: "Ward 150 - Bellandur", zone: "East Zone", lat: 12.9279, lng: 77.6801, radius: 0.03, locality: "Bellandur" },
-  { name: "Ward 80 - Hoysala Nagar", zone: "East Zone", lat: 12.9784, lng: 77.6386, radius: 0.025, locality: "Indiranagar" },
-  { name: "Ward 85 - Domlur", zone: "East Zone", lat: 12.9611, lng: 77.6387, radius: 0.02, locality: "Domlur" },
-  { name: "Ward 103 - Jayanagar", zone: "South Zone", lat: 12.9308, lng: 77.5836, radius: 0.025, locality: "Jayanagar" },
-  { name: "Ward 69 - Shivajinagar", zone: "Central Zone", lat: 12.9867, lng: 77.6044, radius: 0.02, locality: "Shivajinagar" },
-  { name: "Ward 63 - Hebbal", zone: "North Zone", lat: 13.0358, lng: 77.5973, radius: 0.025, locality: "Hebbal" },
-];
-
-function getWardForCoordinates(lat: number, lng: number) {
-  let closest = WARD_BOUNDARIES[0];
-  let minDist = Infinity;
-  for (const ward of WARD_BOUNDARIES) {
-    const dist = Math.sqrt(Math.pow(lat - ward.lat, 2) + Math.pow(lng - ward.lng, 2));
-    if (dist < minDist) {
-      minDist = dist;
-      closest = ward;
-    }
-  }
-  return closest;
 }
 
 const SOURCE_LABELS: Record<LocationData["source"], string> = {

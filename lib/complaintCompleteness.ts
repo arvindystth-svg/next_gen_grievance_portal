@@ -22,10 +22,17 @@ interface LocationInput {
   source?: string;
 }
 
+interface AreaInput {
+  ward: string;
+  zone: string;
+  locality: string;
+}
+
 interface AssessParams {
   grievanceText: string;
   editedSummary: string;
   location: LocationInput | null;
+  selectedArea: AreaInput | null;
   selectedLocalDepartments: string[];
   aiObservation?: string;
   aiMissing?: boolean;
@@ -38,6 +45,7 @@ const LANDMARK_PATTERNS = [
   /\bmain\s+road\b/i,
   /\bstreet\s*(no\.?|number)?\s*\d+/i,
   /\bplot\s*(no\.?|#)?\s*\d+/i,
+  /\b(area|stretch|locality|neighbourhood|neighborhood)\b/i,
 ];
 
 const TIMELINE_PATTERNS = [
@@ -78,9 +86,13 @@ function needsUtilityId(departments: string[]): boolean {
   );
 }
 
-function wardConfirmed(location: LocationInput | null): boolean {
-  if (!location?.ward) return false;
-  const w = location.ward.toLowerCase();
+function areaConfirmed(
+  selectedArea: AreaInput | null,
+  location: LocationInput | null
+): boolean {
+  const ward = selectedArea?.ward || location?.ward;
+  if (!ward) return false;
+  const w = ward.toLowerCase();
   return !w.includes("to be confirmed") && !w.includes("unknown");
 }
 
@@ -93,34 +105,27 @@ export function assessComplaintCompleteness(params: AssessParams): CompletenessR
     label: "Issue description",
     fillHint: "Describe what is wrong, how it affects you, and any safety concerns in Step 1.",
     completed: params.grievanceText.trim().length >= 20,
-    weight: 20,
-  });
-
-  fields.push({
-    id: "location",
-    label: "Pinned map location",
-    fillHint: "Pin the issue on the map in the review step using GPS, photo EXIF, or by dragging the marker.",
-    completed: Boolean(params.location?.lat && params.location?.lng),
-    weight: 20,
+    weight: 25,
   });
 
   fields.push({
     id: "ward",
     label: "Ward & locality",
-    fillHint: "Confirm ward and locality by pinning the location on the map in the review step.",
-    completed: wardConfirmed(params.location),
-    weight: 15,
+    fillHint:
+      "Select the affected ward/locality from the dropdown, or mention the area in your summary so it auto-fills.",
+    completed: areaConfirmed(params.selectedArea, params.location),
+    weight: 25,
   });
 
   const landmarkFromText = hasLandmark(text);
   fields.push({
     id: "landmark",
-    label: "Landmark or street address",
+    label: "Area or landmark",
     fillHint:
       params.aiObservation && params.aiMissing
         ? params.aiObservation
-        : "Add a nearby landmark (temple, school, bus stop, hospital) or street name in your description or summary.",
-    completed: landmarkFromText || params.aiMissing === false,
+        : "Mention the affected stretch, landmark, or neighbourhood — a pinpoint pin is optional for area-wide issues.",
+    completed: landmarkFromText || params.aiMissing === false || areaConfirmed(params.selectedArea, params.location),
     weight: 15,
   });
 
@@ -135,9 +140,9 @@ export function assessComplaintCompleteness(params: AssessParams): CompletenessR
   fields.push({
     id: "departments",
     label: "Department routing",
-    fillHint: "Confirm or correct the routed departments in the review step so your ticket reaches the right team.",
+    fillHint: "Confirm or correct the routed departments so your ticket reaches the right team.",
     completed: params.selectedLocalDepartments.length > 0,
-    weight: 10,
+    weight: 15,
   });
 
   const utilityNeeded = needsUtilityId(params.selectedLocalDepartments);

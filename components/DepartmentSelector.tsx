@@ -9,7 +9,7 @@ interface DepartmentSelectorProps {
   selected: string[];
   options: string[];
   onChange: (selected: string[]) => void;
-  badgeClassName?: string;
+  chipClassName?: string;
   placeholder?: string;
 }
 
@@ -19,7 +19,7 @@ export default function DepartmentSelector({
   selected,
   options,
   onChange,
-  badgeClassName = "bg-blue-100 text-blue-700 border-blue-200",
+  chipClassName = "bg-blue-100 text-blue-700 border-blue-200",
   placeholder = "Search departments…",
 }: DepartmentSelectorProps) {
   const [open, setOpen] = useState(false);
@@ -48,7 +48,8 @@ export default function DepartmentSelector({
     }
   };
 
-  const remove = (dept: string) => {
+  const remove = (dept: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     onChange(selected.filter((d) => d !== dept));
   };
 
@@ -56,55 +57,47 @@ export default function DepartmentSelector({
     <div ref={containerRef} className="relative">
       <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">
         {label}
-        {selected.length > 1 && (
-          <span className="ml-1.5 text-[10px] font-bold text-blue-600 normal-case tracking-normal">
-            ({selected.length} selected)
-          </span>
-        )}
       </label>
       {hint && <p className="text-xs text-slate-400 mb-2">{hint}</p>}
 
-      {/* Selected tags */}
-      {selected.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-2">
-          {selected.map((dept) => (
-            <span
-              key={dept}
-              className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full border ${badgeClassName}`}
-            >
-              {dept}
-              <button
-                type="button"
-                onClick={() => remove(dept)}
-                className="hover:opacity-70 transition-opacity"
-                aria-label={`Remove ${dept}`}
-              >
-                <X size={12} />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Search trigger */}
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm border-2 border-slate-200 rounded-xl bg-white hover:border-blue-300 focus:outline-none focus:border-blue-500 transition-colors text-left"
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm border-2 border-slate-200 rounded-xl bg-white hover:border-blue-300 focus:outline-none focus:border-blue-500 transition-colors text-left min-h-[44px]"
       >
         <Search size={14} className="text-slate-400 flex-shrink-0" />
-        <span className="flex-1 text-slate-400 truncate">
-          {selected.length === 0
-            ? placeholder
-            : "Search to add or remove departments…"}
-        </span>
+        <div className="flex-1 flex flex-wrap items-center gap-1.5 min-w-0">
+          {selected.length === 0 ? (
+            <span className="text-slate-400">{placeholder}</span>
+          ) : (
+            selected.map((dept) => (
+              <span
+                key={dept}
+                className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border max-w-full ${chipClassName}`}
+              >
+                <span className="truncate">{dept}</span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => remove(dept, e)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") remove(dept, e as unknown as React.MouseEvent);
+                  }}
+                  className="hover:opacity-70 flex-shrink-0"
+                  aria-label={`Remove ${dept}`}
+                >
+                  <X size={10} />
+                </span>
+              </span>
+            ))
+          )}
+        </div>
         <ChevronDown
           size={14}
           className={`text-slate-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
 
-      {/* Multi-select dropdown */}
       {open && (
         <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
           <div className="p-2 border-b border-slate-100">
@@ -152,12 +145,6 @@ export default function DepartmentSelector({
               })
             )}
           </ul>
-          {selected.length > 0 && (
-            <div className="px-3 py-2 border-t border-slate-100 bg-slate-50 text-[10px] text-slate-500">
-              Tap items to toggle selection · {selected.length} department
-              {selected.length !== 1 ? "s" : ""} chosen
-            </div>
-          )}
         </div>
       )}
     </div>

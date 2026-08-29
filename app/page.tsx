@@ -8,7 +8,9 @@ import DuplicateBanner from "@/components/DuplicateBanner";
 import ComplaintHistory from "@/components/ComplaintHistory";
 import CompletenessCard from "@/components/CompletenessCard";
 import DepartmentSelector from "@/components/DepartmentSelector";
+import WardAreaSelector from "@/components/WardAreaSelector";
 import { assessComplaintCompleteness } from "@/lib/complaintCompleteness";
+import { extractAreaFromText } from "@/lib/bengaluruAreas";
 import {
   LOCAL_DEPARTMENTS,
   CPGRAMS_MINISTRIES,
@@ -235,6 +237,13 @@ export default function Home() {
   const [routingUpdated, setRoutingUpdated] = useState(false);
   const lastAutoRoutedSummary = useRef<string | null>(null);
   const locationSectionRef = useRef<HTMLDivElement>(null);
+  const areaSectionRef = useRef<HTMLDivElement>(null);
+  const areaManuallySet = useRef(false);
+  const [selectedArea, setSelectedArea] = useState<{
+    ward: string;
+    zone: string;
+    locality: string;
+  } | null>(null);
 
   useEffect(() => {
     setComplaints(getComplaintHistory());
@@ -277,6 +286,10 @@ export default function Home() {
 
       setSelectedLocalDepartments(result.localDepartments);
       setSelectedCpgramsCategories(result.cpgramsCategories);
+      if (!areaManuallySet.current) {
+        const extracted = extractAreaFromText(`${grievanceText}\n${editedSummary}`);
+        if (extracted) applySelectedArea(extracted);
+      }
       setAnalysisResult((prev) =>
         prev
           ? {
@@ -309,6 +322,7 @@ export default function Home() {
       grievanceText,
       editedSummary,
       location,
+      selectedArea,
       selectedLocalDepartments,
       aiMissing: analysisResult.missing_details_advisory.is_missing,
       aiObservation: analysisResult.missing_details_advisory.observation,
@@ -317,22 +331,45 @@ export default function Home() {
     grievanceText,
     editedSummary,
     location,
+    selectedArea,
     selectedLocalDepartments,
     analysisResult,
   ]);
+
+  const applySelectedArea = (area: { ward: string; zone: string; locality: string }, manual = false) => {
+    if (manual) areaManuallySet.current = true;
+    setSelectedArea(area);
+    setAnalysisResult((prev) =>
+      prev
+        ? {
+            ...prev,
+            location: {
+              ...prev.location,
+              ward: area.ward,
+              zone: area.zone,
+              locality: area.locality,
+            },
+          }
+        : null
+    );
+  };
 
   const handleFixCompletenessField = (fieldId: string) => {
     if (fieldId === "description") {
       goToStep(1);
       return;
     }
-    if (fieldId === "location" || fieldId === "ward") {
-      locationSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (fieldId === "ward" || fieldId === "landmark") {
+      areaSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
 
   const handleReviewLocationChange = (loc: LocationData) => {
     setLocation(loc);
+    const wardInfo = loc.ward
+      ? { ward: loc.ward, zone: loc.zone || "To be confirmed", locality: loc.locality || loc.ward }
+      : null;
+    if (wardInfo) applySelectedArea(wardInfo);
     setAnalysisResult((prev) =>
       prev
         ? {
@@ -409,8 +446,19 @@ export default function Home() {
       setSelectedLocalDepartments(localDepts);
       setSelectedCpgramsCategories(cpgramsCats);
       lastAutoRoutedSummary.current = data.summary;
+      areaManuallySet.current = false;
+      const extracted =
+        extractAreaFromText(`${grievanceText}\n${data.summary}`) ||
+        (data.location.ward
+          ? {
+              ward: data.location.ward,
+              zone: data.location.zone,
+              locality: data.location.locality,
+            }
+          : null);
+      if (extracted) applySelectedArea(extracted);
 
-      // If AI extracted a better location, suggest it
+      // If AI extracted coordinates, suggest optional pin
       if (data.location.latitude && data.location.longitude && !location) {
         const sugLoc = {
           lat: data.location.latitude,
@@ -451,8 +499,8 @@ export default function Home() {
           ? analysisResult.local_departments
           : [analysisResult.local_department],
         urgency: analysisResult.urgency,
-        ward: location?.ward || analysisResult.location.ward,
-        locality: location?.locality || analysisResult.location.locality,
+        ward: selectedArea?.ward || location?.ward || analysisResult.location.ward,
+        locality: selectedArea?.locality || location?.locality || analysisResult.location.locality,
       };
       setComplaints(saveComplaintToHistory(record));
     }
@@ -478,6 +526,8 @@ export default function Home() {
     setSuggestedLocation(null);
     setSelectedLocalDepartments([]);
     setSelectedCpgramsCategories([]);
+    setSelectedArea(null);
+    areaManuallySet.current = false;
     setMaxStepReached(1);
     lastAutoRoutedSummary.current = null;
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -697,7 +747,7 @@ export default function Home() {
                   className="w-full px-4 py-3 text-sm border-2 border-blue-200 bg-blue-50 rounded-xl focus:border-blue-500 focus:outline-none resize-none text-slate-800 focus:bg-white transition-colors"
                 />
                 <p className="text-xs text-slate-400 mt-1">
-                  ✏️ Edit the summary to add more issues — department tags and keywords update automatically
+                  ✏️ Edit the summary to add more issues — classification tags update automatically
                 </p>
                 {routingUpdated && (
                   <p className="text-xs text-green-600 mt-1.5 flex items-center gap-1">
@@ -707,41 +757,49 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Extracted keywords — directly below summary */}
-              {analysisResult.keywords?.length > 0 && (
+              {/* Classification tags below summary */}
+              {(selectedLocalDepartments.length > 0 || selectedCpgramsCategories.length > 0) && (
                 <div className="mb-4">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                    Extracted Keywords
+                    Classification
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {analysisResult.keywords.map((kw) => (
+                    {selectedLocalDepartments.map((dept) => (
                       <span
-                        key={kw}
-                        className="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full"
+                        key={dept}
+                        className="text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full"
                       >
-                        #{kw}
+                        {dept}
+                      </span>
+                    ))}
+                    {selectedCpgramsCategories.map((cat) => (
+                      <span
+                        key={cat}
+                        className="text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-200 px-2.5 py-1 rounded-full"
+                      >
+                        {cat}
                       </span>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Classification & routing — editable via searchable dropdown */}
+              {/* Routing — editable inline selectors */}
               <div className="space-y-4 pt-4 border-t border-slate-100">
                 <div className="flex items-center gap-1">
                   <Tag size={12} className="text-slate-500" />
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Classification &amp; Routing
+                    Routing
                   </span>
                 </div>
 
                 <DepartmentSelector
                   label="Local Departments"
-                  hint="Select one or more departments. Tags sync when you edit the summary above, or pick manually from the dropdown."
+                  hint="Departments shown above update here. Search to add or remove."
                   selected={selectedLocalDepartments}
                   options={LOCAL_DEPARTMENTS}
                   onChange={handleLocalDepartmentsChange}
-                  badgeClassName="bg-blue-100 text-blue-700 border-blue-200"
+                  chipClassName="bg-blue-100 text-blue-700 border-blue-200"
                   placeholder="Search BBMP, BWSSB, BESCOM departments…"
                 />
 
@@ -751,43 +809,42 @@ export default function Home() {
                   selected={selectedCpgramsCategories}
                   options={CPGRAMS_MINISTRIES}
                   onChange={setSelectedCpgramsCategories}
-                  badgeClassName="bg-purple-100 text-purple-700 border-purple-200"
+                  chipClassName="bg-purple-100 text-purple-700 border-purple-200"
                   placeholder="Search CPGRAMS ministries…"
                 />
               </div>
             </div>
 
-            {/* Pinpoint location — part of review step */}
+            {/* Area & optional pinpoint */}
             <div
-              ref={locationSectionRef}
-              className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+              ref={areaSectionRef}
+              className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden space-y-0"
             >
               <div className="bg-slate-50 border-b border-slate-200 px-5 py-4">
                 <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
                   <MapPin size={16} className="text-blue-500" />
-                  Pinpoint Location
+                  Affected Area
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Mark the exact issue spot on the map. Use GPS, upload a photo, or drag the pin.
+                  Ward and locality auto-fill from your complaint. Pinning on the map is optional for area-wide issues.
                 </p>
               </div>
-              <div className="p-5">
-                <LocationPicker
-                  location={location}
-                  onLocationChange={handleReviewLocationChange}
-                  suggestedLocation={suggestedLocation}
+              <div className="p-5 space-y-5">
+                <WardAreaSelector
+                  value={selectedArea}
+                  onChange={(area) => applySelectedArea(area, true)}
                 />
-                {location && (
-                  <div className="grid grid-cols-2 gap-3 mt-4">
-                    <InfoRow label="Ward" value={location.ward || analysisResult.location.ward} />
-                    <InfoRow label="Zone" value={location.zone || analysisResult.location.zone} />
-                    <InfoRow label="Locality" value={location.locality || analysisResult.location.locality} />
-                    <InfoRow
-                      label="Coordinates"
-                      value={`${location.lat.toFixed(4)}°N, ${location.lng.toFixed(4)}°E`}
-                    />
-                  </div>
-                )}
+
+                <div ref={locationSectionRef}>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                    Pinpoint on Map (optional)
+                  </p>
+                  <LocationPicker
+                    location={location}
+                    onLocationChange={handleReviewLocationChange}
+                    suggestedLocation={suggestedLocation}
+                  />
+                </div>
               </div>
             </div>
 
@@ -811,7 +868,7 @@ export default function Home() {
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={isSubmitting || selectedLocalDepartments.length === 0 || !location}
+                disabled={isSubmitting || selectedLocalDepartments.length === 0}
                 className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white font-bold py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
