@@ -18,7 +18,6 @@ import {
   cpgramsForLocalDepartments,
 } from "@/lib/departments";
 import {
-  getComplaintHistory,
   getComplaintsForCitizen,
   getDemoComplaints,
   saveComplaintToHistory,
