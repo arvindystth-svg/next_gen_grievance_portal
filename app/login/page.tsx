@@ -83,8 +83,8 @@ export default function LoginPage() {
           <div className="w-11 h-11 bg-white rounded-full flex items-center justify-center mx-auto mb-2 shadow">
             <span className="text-xl">🏛️</span>
           </div>
-          <h1 className="text-lg font-bold">AI CPGRAMS Local</h1>
-          <p className="text-blue-200 text-xs mt-0.5">Citizen login · Bengaluru</p>
+          <h1 className="text-lg font-bold">Next-Gen National Grievance Portal</h1>
+          <p className="text-blue-200 text-xs mt-0.5">Citizen login · Government of India</p>
         </div>
       </header>
 

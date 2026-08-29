@@ -17,6 +17,13 @@ const BENGALURU_BOUNDS = {
   maxLng: 77.85,
 };
 
+const INDIA_BOUNDS = {
+  minLat: 6.5,
+  maxLat: 37.1,
+  minLng: 68.1,
+  maxLng: 97.4,
+};
+
 const LOCATION_CUE_PATTERNS = [
   /\b(?:near|in|at|around|opposite|beside|behind)\s+([a-z0-9][a-z0-9\s.'-]{2,40})/gi,
   /\b([a-z][a-z\s.'-]{2,30})\s+(?:area|locality|ward)\b/gi,
@@ -39,6 +46,15 @@ export function isInBengaluru(lat: number, lng: number): boolean {
     lat <= BENGALURU_BOUNDS.maxLat &&
     lng >= BENGALURU_BOUNDS.minLng &&
     lng <= BENGALURU_BOUNDS.maxLng
+  );
+}
+
+function isInIndia(lat: number, lng: number): boolean {
+  return (
+    lat >= INDIA_BOUNDS.minLat &&
+    lat <= INDIA_BOUNDS.maxLat &&
+    lng >= INDIA_BOUNDS.minLng &&
+    lng <= INDIA_BOUNDS.maxLng
   );
 }
 
@@ -107,6 +123,33 @@ function wardFromMatch(ward: BengaluruWard, lat: number, lng: number, source: Re
   };
 }
 
+/** Extract a human-readable locality from a Nominatim address object */
+function localityFromAddress(address: Record<string, string>): string {
+  return (
+    address.suburb ||
+    address.neighbourhood ||
+    address.quarter ||
+    address.road ||
+    address.village ||
+    address.town ||
+    address.city_district ||
+    address.county ||
+    address.city ||
+    address.state_district ||
+    address.state ||
+    ""
+  );
+}
+
+/** Build a zone/district label from a Nominatim address object */
+function zoneFromAddress(address: Record<string, string>): string {
+  const city =
+    address.city || address.town || address.village || address.county || address.state_district || "";
+  const state = address.state || "";
+  if (city && state) return `${city}, ${state}`;
+  return city || state || "India";
+}
+
 export function resolveAreaFromKeyword(text: string): ResolvedArea | null {
   const extracted = extractAreaFromText(text);
   if (!extracted || !isConfirmedWard(extracted.ward)) return null;
@@ -120,40 +163,70 @@ export function resolveAreaFromKeyword(text: string): ResolvedArea | null {
 }
 
 export async function geocodeQuery(query: string): Promise<ResolvedArea | null> {
-  const search = `${query}, Bengaluru, Karnataka, India`;
-  const url = new URL("https://nominatim.openstreetmap.org/search");
-  url.searchParams.set("q", search);
-  url.searchParams.set("format", "json");
-  url.searchParams.set("limit", "1");
-  url.searchParams.set("countrycodes", "in");
+  // Search India-wide first; fall back to Bengaluru-scoped if no India hit
+  const searchQueries = [`${query}, India`, `${query}, Bengaluru, Karnataka, India`];
 
-  const response = await fetch(url.toString(), {
-    headers: {
-      "User-Agent": "AI-CPGRAMS-Local/1.0 (Bengaluru civic grievance portal)",
-      Accept: "application/json",
-    },
-    next: { revalidate: 0 },
-  });
+  for (const search of searchQueries) {
+    const url = new URL("https://nominatim.openstreetmap.org/search");
+    url.searchParams.set("q", search);
+    url.searchParams.set("format", "json");
+    url.searchParams.set("limit", "1");
+    url.searchParams.set("countrycodes", "in");
+    url.searchParams.set("addressdetails", "1");
 
-  if (!response.ok) return null;
+    let response: Response;
+    try {
+      response = await fetch(url.toString(), {
+        headers: {
+          "User-Agent": "NextGen-National-Grievance-Portal/1.0 (citizen grievance portal India)",
+          Accept: "application/json",
+        },
+        next: { revalidate: 0 },
+      });
+    } catch {
+      continue;
+    }
 
-  const results = (await response.json()) as Array<{
-    lat: string;
-    lon: string;
-    display_name: string;
-  }>;
+    if (!response.ok) continue;
 
-  const hit = results[0];
-  if (!hit) return null;
+    const results = (await response.json()) as Array<{
+      lat: string;
+      lon: string;
+      display_name: string;
+      address?: Record<string, string>;
+    }>;
 
-  const lat = Number(hit.lat);
-  const lng = Number(hit.lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng) || !isInBengaluru(lat, lng)) {
-    return null;
+    const hit = results[0];
+    if (!hit) continue;
+
+    const lat = Number(hit.lat);
+    const lng = Number(hit.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !isInIndia(lat, lng)) {
+      continue;
+    }
+
+    const address = hit.address ?? {};
+    const locality = localityFromAddress(address) || query;
+    const zone = zoneFromAddress(address);
+
+    // If the location is within Bengaluru, also resolve the BBMP ward for richer data
+    if (isInBengaluru(lat, lng)) {
+      const ward = getWardForCoordinates(lat, lng);
+      return wardFromMatch(ward, lat, lng, "nominatim", hit.display_name);
+    }
+
+    return {
+      ward: locality,
+      zone,
+      locality,
+      lat,
+      lng,
+      source: "nominatim",
+      displayName: hit.display_name,
+    };
   }
 
-  const ward = getWardForCoordinates(lat, lng);
-  return wardFromMatch(ward, lat, lng, "nominatim", hit.display_name);
+  return null;
 }
 
 export async function resolveAreaFromText(

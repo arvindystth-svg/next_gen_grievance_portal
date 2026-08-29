@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AI CPGRAMS Local — Bengaluru Citizen Grievance Portal",
+  title: "Next-Gen National Grievance Portal",
   description:
-    "File municipal grievances for BBMP, BWSSB, and BESCOM services in Bengaluru. AI-powered intake, deduplication, and instant routing to the right department.",
-  keywords: "CPGRAMS, BBMP, grievance, Bengaluru, citizen portal, municipal complaints",
+    "File civic grievances with AI-powered intake, deduplication, and instant routing to the right department — anywhere in India.",
+  keywords: "CPGRAMS, grievance portal, citizen portal, national grievance, India, complaints",
   openGraph: {
-    title: "AI CPGRAMS Local — Bengaluru Citizen Grievance Portal",
-    description: "AI-powered civic grievance redressal for Bengaluru citizens",
+    title: "Next-Gen National Grievance Portal",
+    description: "AI-powered civic grievance redressal for citizens across India",
     type: "website",
   },
 };

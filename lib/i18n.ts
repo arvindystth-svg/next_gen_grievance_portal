@@ -9,14 +9,14 @@ export const LANGUAGE_OPTIONS: { code: LanguageCode; native: string }[] = [
 ];
 
 const en = {
-  "app.name": "AI CPGRAMS Local",
-  "app.bengaluru": "Bengaluru",
-  "app.tagline": "Bruhat Bengaluru Mahanagara Palike",
+  "app.name": "Next-Gen National Grievance Portal",
+  "app.bengaluru": "India",
+  "app.tagline": "Government of India — Citizen Grievance Redressal",
   "app.online": "Online",
   "app.offline": "Offline",
   "app.helpline": "Helpline",
   "app.govtInitiative": "Govt. of India Initiative",
-  "app.zoneCoverage": "BBMP South Zone Coverage",
+  "app.zoneCoverage": "All States & Union Territories",
   "app.privacyTitle": "Privacy notice",
   "app.privacyBody":
     "Your complaint details are stored on this device. We do not display personal identity in the portal. Departments receive only the information needed to resolve your grievance.",
@@ -29,7 +29,7 @@ const en = {
   "common.yourInfo": "Your information",
 
   "hero.fileTitle": "File a Civic Grievance",
-  "hero.fileSubtitle": "AI-powered routing to BBMP, BWSSB & BESCOM · Bengaluru Municipal Services",
+  "hero.fileSubtitle": "AI-powered routing to the right department · Citizen Grievance Redressal across India",
   "hero.historyTitle": "My Complaint History",
   "hero.historySubtitle": "Track status, resolutions, and rate closed complaints",
 
@@ -149,7 +149,7 @@ const en = {
   "history.resolution": "Resolution",
   "history.demo": "Sample complaints (demonstration only)",
 
-  "footer.tagline": "AI CPGRAMS Local · BBMP Grievance Portal · Bengaluru, Karnataka",
+  "footer.tagline": "Next-Gen National Grievance Portal · Government of India · Citizen Services",
   "footer.privacy":
     "Grievance data is stored on this device. Handled as per IT Act 2000 & DPDP Act 2023.",
   "footer.helplines": "Civic Helpline: {n1533} · BBMP: {bbmp} · BWSSB: {bwssb}",

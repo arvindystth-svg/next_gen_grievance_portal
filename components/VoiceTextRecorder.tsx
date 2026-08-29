@@ -87,7 +87,6 @@ export default function VoiceTextRecorder({
 }: VoiceTextRecorderProps) {
   const [isListening, setIsListening] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
-  const [interimText, setInterimText] = useState("");
   const [speechError, setSpeechError] = useState<string | null>(null);
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
@@ -99,6 +98,7 @@ export default function VoiceTextRecorder({
   const recordingSecondsRef = useRef(0);
   const intentionalStopRef = useRef(false);
   const textRef = useRef(text);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     textRef.current = text;
@@ -163,7 +163,6 @@ export default function VoiceTextRecorder({
     }
 
     setIsListening(false);
-    setInterimText("");
   }, [stopMediaRecorder]);
 
   const startWebSpeech = useCallback(() => {
@@ -197,14 +196,19 @@ export default function VoiceTextRecorder({
         }
       }
 
-      setInterimText(sessionInterim);
-
       const parts = [baseTextRef.current, sessionFinal.trim(), sessionInterim.trim()].filter(
         Boolean
       );
       const next = parts.join(" ");
       // Allow up to MAX_WORDS — do not cut off mid-speech
       onTextChange(next);
+
+      // Auto-scroll textarea to bottom so live text stays visible
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
+        }
+      });
     };
 
     recognition.onerror = (event) => {
@@ -228,7 +232,6 @@ export default function VoiceTextRecorder({
         }
       }
       setIsListening(false);
-      setInterimText("");
       recognitionRef.current = null;
     };
 
@@ -314,6 +317,7 @@ export default function VoiceTextRecorder({
       <div className="flex gap-3 items-start">
         <div className="relative flex-1 min-w-0">
           <textarea
+            ref={textareaRef}
             value={text}
             onChange={(e) => onTextChange(e.target.value)}
             onBlur={onBlur}
@@ -321,13 +325,16 @@ export default function VoiceTextRecorder({
             rows={5}
             className={`w-full px-4 py-3 text-sm border-2 rounded-xl focus:outline-none resize-none bg-white text-slate-800 placeholder-slate-400 transition-colors ${
               isListening
-                ? "border-red-300 focus:border-red-400"
+                ? "border-red-400 focus:border-red-500"
                 : "border-slate-200 focus:border-blue-500"
             }`}
           />
           <div className="absolute bottom-3 right-3 flex items-center gap-2">
             {isListening && (
-              <span className="text-xs text-red-500 font-medium animate-pulse">Listening…</span>
+              <span className="text-xs text-red-500 font-medium animate-pulse flex items-center gap-1">
+                <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                Transcribing…
+              </span>
             )}
             {isRefining && (
               <span className="text-xs text-blue-600 font-medium flex items-center gap-1">
@@ -393,12 +400,6 @@ export default function VoiceTextRecorder({
       {speechError && (
         <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
           {speechError}
-        </p>
-      )}
-
-      {isListening && interimText && (
-        <p className="text-xs text-slate-500 italic px-1">
-          Recognizing: &ldquo;{interimText}&rdquo;
         </p>
       )}
 
