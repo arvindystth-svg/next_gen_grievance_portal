@@ -120,8 +120,10 @@ function canNavigateTo(
   target: Step,
   current: Step,
   maxReached: Step,
-  isAnalyzing: boolean
+  isAnalyzing: boolean,
+  isSubmitted: boolean
 ): boolean {
+  if (isSubmitted || current === 4) return false;
   if (target === current || isAnalyzing || target === 2) return false;
   return target <= maxReached;
 }
@@ -130,11 +132,13 @@ function StepIndicator({
   current,
   maxReached,
   isAnalyzing,
+  isSubmitted,
   onStepClick,
 }: {
   current: Step;
   maxReached: Step;
   isAnalyzing: boolean;
+  isSubmitted: boolean;
   onStepClick: (step: Step) => void;
 }) {
   const steps = [
@@ -146,7 +150,7 @@ function StepIndicator({
   return (
     <div className="flex items-center justify-center gap-0 mb-6">
       {steps.map((step, i) => {
-        const navigable = canNavigateTo(step.num, current, maxReached, isAnalyzing);
+        const navigable = canNavigateTo(step.num, current, maxReached, isAnalyzing, isSubmitted);
         return (
           <div key={step.num} className="flex items-center">
             <div className="flex flex-col items-center">
@@ -320,21 +324,17 @@ export default function Home() {
   }, [editedSummary, step]);
 
   const goToStep = (target: Step) => {
-    if (!canNavigateTo(target, step, maxStepReached, isAnalyzing)) return;
-    if (step === 4 && target === 1) {
-      handleReset();
-      return;
-    }
-    if (step === 4) setSubmittedId(null);
+    if (submittedId && step === 4) return;
+    if (!canNavigateTo(target, step, maxStepReached, isAnalyzing, Boolean(submittedId && step === 4))) return;
     setIsAnalyzing(false);
     setStep(target);
   };
 
   const effectiveSupplemental = useMemo(() => {
     const result: SupplementalDetails = {};
-    (Object.keys(supplementalDetails) as SupplementalDetailId[]).forEach((key) => {
-      if (enabledDetails[key] && supplementalDetails[key]?.trim()) {
-        result[key] = supplementalDetails[key];
+    (Object.keys(enabledDetails) as SupplementalDetailId[]).forEach((key) => {
+      if (enabledDetails[key]) {
+        result[key] = supplementalDetails[key] ?? "";
       }
     });
     return result;
@@ -561,6 +561,7 @@ export default function Home() {
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting || submittedId) return;
     setIsSubmitting(true);
     await new Promise((r) => setTimeout(r, 1500));
     const id = `GRV-BLR-${Date.now().toString().slice(-6)}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
@@ -627,7 +628,10 @@ export default function Home() {
         onLanguageChange={setLanguage}
         isOnline={isOnline}
         offlineQueueCount={offlineQueueCount}
-        onMyComplaintsClick={() => setActiveView("history")}
+        onMyComplaintsClick={() => {
+          if (step === 4 && submittedId) handleReset();
+          setActiveView("history");
+        }}
         complaintCount={complaints.length}
       />
 
@@ -644,11 +648,12 @@ export default function Home() {
           </p>
         </div>
 
-        {activeView === "file" && (
+        {activeView === "file" && step !== 4 && (
           <StepIndicator
             current={step}
             maxReached={maxStepReached}
             isAnalyzing={isAnalyzing}
+            isSubmitted={false}
             onStepClick={goToStep}
           />
         )}
@@ -956,10 +961,6 @@ export default function Home() {
         {/* ── STEP 4: Submitted ─────────────────────────────────────── */}
         {activeView === "file" && step === 4 && submittedId && (
           <div className="space-y-5">
-            <StepBackButton
-              label="Back to Review & Edit"
-              onClick={() => goToStep(3)}
-            />
             {/* Success */}
             <div className="bg-white rounded-2xl shadow-sm border border-green-200 p-8 text-center">
               <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
@@ -970,6 +971,7 @@ export default function Home() {
               </h3>
               <p className="text-slate-500 text-sm mb-6">
                 Your grievance has been officially filed and routed to the appropriate department.
+                Use <span className="font-medium text-slate-700">My Complaints</span> to track it, or file a new grievance from the home screen.
               </p>
 
               {/* Reference ID */}

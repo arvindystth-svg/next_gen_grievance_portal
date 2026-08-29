@@ -90,9 +90,13 @@ const LANDMARK_PATTERNS = [
 
 const TIMELINE_PATTERNS = [
   /\b(since|for|past|last)\s+\d+\s+(day|week|month|hour)/i,
-  /\b\d+\s+(days?|weeks?|months?)\s+(ago|back)/i,
+  /\b\d+\s+(days?|weeks?|months?|hours?)\s+(ago|back)/i,
   /\b(yesterday|today|this\s+morning|last\s+night)\b/i,
   /\bstarted\s+on\b/i,
+  /\b(last|past)\s+(week|month|few\s+days?)\b/i,
+  /\bfor\s+(a|one|two|three|several)\s+(day|week|month)/i,
+  /\b(week|month)\s+ago\b/i,
+  /\brecent(ly)?\b/i,
 ];
 
 const CONSUMER_ID_PATTERNS = [
@@ -165,11 +169,17 @@ function supplementalIsValid(id: SupplementalDetailId, supplemental?: Supplement
       return words.length >= 3 && !isGibberish(val);
     }
     case "ward":
-      if (val.length < 4 || isGibberish(val)) return false;
-      return Boolean(extractAreaFromText(val) || /\bward\s*\d+/i.test(val) || /\blocalit(y|ies)\b/i.test(val));
+      if (val.length < 3 || isGibberish(val)) return false;
+      return Boolean(
+        extractAreaFromText(val) ||
+          /\bward\s*\d+/i.test(val) ||
+          /\blocalit(y|ies)\b/i.test(val) ||
+          /\b(nagar|layout|road|main|cross|block)\b/i.test(val)
+      );
     case "landmark": {
-      if (val.length < 8 || isGibberish(val)) return false;
+      if (val.length < 6 || isGibberish(val)) return false;
       if (LANDMARK_PATTERNS.some((p) => p.test(val))) return true;
+      if (extractAreaFromText(val)) return true;
       const words = val.split(/\s+/).filter((w) => w.length > 2);
       return words.length >= 2;
     }
@@ -180,6 +190,17 @@ function supplementalIsValid(id: SupplementalDetailId, supplemental?: Supplement
     default:
       return false;
   }
+}
+
+export type SupplementalValidationStatus = "empty" | "pending" | "valid";
+
+export function validateSupplementalDetail(
+  id: SupplementalDetailId,
+  value: string
+): SupplementalValidationStatus {
+  const trimmed = value.trim();
+  if (!trimmed) return "empty";
+  return supplementalIsValid(id, { [id]: trimmed }) ? "valid" : "pending";
 }
 
 function hasLandmark(text: string, supplemental?: SupplementalDetails): boolean {

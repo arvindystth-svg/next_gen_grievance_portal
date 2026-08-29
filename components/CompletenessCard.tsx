@@ -6,6 +6,7 @@ import {
   SupplementalDetailId,
   SupplementalDetails,
   DETAIL_INPUT_CONFIG,
+  validateSupplementalDetail,
 } from "@/lib/complaintCompleteness";
 
 interface CompletenessCardProps {
@@ -80,7 +81,12 @@ export default function CompletenessCard({
             </p>
           </div>
           <div className="text-center flex-shrink-0">
-            <div className={`text-3xl font-black ${scoreColor(score)}`}>{score}%</div>
+            <div
+              key={score}
+              className={`text-3xl font-black transition-all duration-300 ${scoreColor(score)}`}
+            >
+              {score}%
+            </div>
             <div className="text-[10px] text-slate-500 uppercase tracking-wider">Complete</div>
           </div>
         </div>
@@ -104,6 +110,7 @@ export default function CompletenessCard({
               const config = DETAIL_INPUT_CONFIG[detailId];
               const enabled = Boolean(enabledDetails[detailId]);
               const value = supplementalDetails[detailId] || "";
+              const validationStatus = enabled ? validateSupplementalDetail(detailId, value) : "empty";
 
               return (
                 <li
@@ -150,7 +157,13 @@ export default function CompletenessCard({
                           autoComplete="off"
                           inputMode="text"
                           name={`supplemental-${detailId}`}
-                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 resize-none text-slate-800"
+                          className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 resize-none text-slate-800 ${
+                            validationStatus === "valid"
+                              ? "border-green-300 focus:border-green-500 focus:ring-green-100"
+                              : validationStatus === "pending"
+                              ? "border-amber-300 focus:border-amber-500 focus:ring-amber-100"
+                              : "border-slate-200 focus:border-blue-500 focus:ring-blue-100"
+                          }`}
                         />
                       ) : (
                         <input
@@ -162,8 +175,25 @@ export default function CompletenessCard({
                           autoComplete="off"
                           inputMode="text"
                           name={`supplemental-${detailId}`}
-                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-slate-800"
+                          className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 text-slate-800 ${
+                            validationStatus === "valid"
+                              ? "border-green-300 focus:border-green-500 focus:ring-green-100"
+                              : validationStatus === "pending"
+                              ? "border-amber-300 focus:border-amber-500 focus:ring-amber-100"
+                              : "border-slate-200 focus:border-blue-500 focus:ring-blue-100"
+                          }`}
                         />
+                      )}
+                      {validationStatus === "valid" && (
+                        <p className="text-[11px] text-green-600 mt-1.5 flex items-center gap-1">
+                          <CheckCircle2 size={11} />
+                          Detail accepted — completeness updated
+                        </p>
+                      )}
+                      {validationStatus === "pending" && (
+                        <p className="text-[11px] text-amber-600 mt-1.5">
+                          Add a bit more relevant detail (e.g. {config.placeholder})
+                        </p>
                       )}
                     </div>
                   )}
