@@ -40,36 +40,40 @@ export default function Header({
   return (
     <>
       {/* Main Header */}
-      <header className={`bg-[#1a3c6e] text-white shadow-lg ${embedded ? "" : "sticky top-0 z-50"}`}>
+      <header className={`bg-[#1a3c6e] text-white ${embedded ? "shadow-md" : "shadow-lg sticky top-0 z-50"}`}>
         {/* Government stripe */}
-        <div className="bg-[#f97316] h-1 w-full" />
+        <div className={`bg-[#f97316] w-full ${embedded ? "h-0.5" : "h-1"}`} />
 
-        <div className="max-w-5xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
+        <div className={`max-w-5xl mx-auto px-3 ${embedded ? "py-1.5" : "px-4 py-3"}`}>
+          <div className="flex items-center justify-between gap-2">
             {/* Branding */}
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="flex-shrink-0 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow">
-                <span className="text-[#1a3c6e] font-black text-sm">🏛️</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`flex-shrink-0 bg-white rounded-full flex items-center justify-center shadow ${embedded ? "w-7 h-7" : "w-10 h-10"}`}>
+                <span className={`text-[#1a3c6e] font-black ${embedded ? "text-xs" : "text-sm"}`}>🏛️</span>
               </div>
               <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="font-bold text-base leading-tight truncate">AI CPGRAMS Local</h1>
-                  <span className="hidden sm:inline-block bg-[#f97316] text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <h1 className={`font-bold leading-tight truncate ${embedded ? "text-sm" : "text-base"}`}>
+                    AI CPGRAMS Local
+                  </h1>
+                  <span className={`bg-[#f97316] text-white font-bold rounded uppercase tracking-wider ${embedded ? "text-[9px] px-1.5 py-0" : "hidden sm:inline-block text-[10px] px-2 py-0.5"}`}>
                     Bengaluru
                   </span>
                 </div>
-                <p className="text-blue-200 text-xs truncate">
-                  Bruhat Bengaluru Mahanagara Palike
-                </p>
+                {!embedded && (
+                  <p className="text-blue-200 text-xs truncate">
+                    Bruhat Bengaluru Mahanagara Palike
+                  </p>
+                )}
               </div>
             </div>
 
             {/* Right controls */}
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-1 flex-shrink-0">
               {/* Offline/Online indicator */}
-              <div className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-full ${isOnline ? "bg-green-500/20 text-green-300" : "bg-red-500/20 text-red-300"}`}>
-                {isOnline ? <Wifi size={12} /> : <WifiOff size={12} />}
-                <span className="hidden sm:inline">{isOnline ? "Online" : "Offline"}</span>
+              <div className={`flex items-center rounded-full ${embedded ? "p-1" : "gap-1.5 text-xs px-2 py-1"} ${isOnline ? "bg-green-500/20 text-green-300" : "bg-red-500/20 text-red-300"}`}>
+                {isOnline ? <Wifi size={embedded ? 11 : 12} /> : <WifiOff size={embedded ? 11 : 12} />}
+                {!embedded && <span className="hidden sm:inline">{isOnline ? "Online" : "Offline"}</span>}
                 {!isOnline && offlineQueueCount > 0 && (
                   <span className="bg-red-500 text-white rounded-full text-[10px] w-4 h-4 flex items-center justify-center font-bold">
                     {offlineQueueCount}
@@ -81,11 +85,13 @@ export default function Header({
               <div className="relative">
                 <button
                   onClick={() => setLangOpen(!langOpen)}
-                  className="flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition-colors"
+                  className={`flex items-center bg-white/10 hover:bg-white/20 rounded-lg transition-colors ${embedded ? "gap-1 px-2 py-1 text-[10px]" : "gap-1.5 text-xs px-3 py-1.5"}`}
                 >
-                  <Globe size={12} />
-                  <span>{currentLang.native}</span>
-                  <ChevronDown size={10} className={`transition-transform ${langOpen ? "rotate-180" : ""}`} />
+                  <Globe size={embedded ? 10 : 12} />
+                  <span className={embedded ? "max-w-[52px] truncate" : ""}>{currentLang.native}</span>
+                  {!embedded && (
+                    <ChevronDown size={10} className={`transition-transform ${langOpen ? "rotate-180" : ""}`} />
+                  )}
                 </button>
                 {langOpen && (
                   <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-xl border border-slate-200 overflow-hidden z-50 min-w-[140px]">
@@ -116,11 +122,11 @@ export default function Header({
               <button
                 type="button"
                 onClick={onMyComplaintsClick}
-                className="relative p-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                className={`relative bg-white/10 hover:bg-white/20 rounded-lg transition-colors ${embedded ? "p-1" : "p-1.5"}`}
                 title="My Complaints"
                 aria-label="View my complaints"
               >
-                <Bell size={14} />
+                <Bell size={embedded ? 12 : 14} />
                 {complaintCount > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-orange-400 text-[#1a3c6e] rounded-full text-[9px] font-bold flex items-center justify-center">
                     {complaintCount > 9 ? "9+" : complaintCount}
@@ -131,20 +137,24 @@ export default function Header({
               {/* Profile button */}
               <button
                 onClick={() => setDrawerOpen(true)}
-                className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition-colors"
+                className={`flex items-center bg-white/10 hover:bg-white/20 rounded-lg transition-colors ${embedded ? "p-1" : "gap-2 px-3 py-1.5"}`}
+                aria-label="Open citizen profile"
               >
-                <div className="w-6 h-6 bg-blue-400 rounded-full flex items-center justify-center text-xs font-bold">
+                <div className={`bg-blue-400 rounded-full flex items-center justify-center font-bold ${embedded ? "w-5 h-5 text-[10px]" : "w-6 h-6 text-xs"}`}>
                   {CITIZEN_PROFILE.name.charAt(0)}
                 </div>
-                <span className="hidden sm:inline text-xs font-medium truncate max-w-[80px]">
-                  {CITIZEN_PROFILE.name.split(" ")[0]}
-                </span>
+                {!embedded && (
+                  <span className="hidden sm:inline text-xs font-medium truncate max-w-[80px]">
+                    {CITIZEN_PROFILE.name.split(" ")[0]}
+                  </span>
+                )}
               </button>
             </div>
           </div>
         </div>
 
-        {/* Status bar */}
+        {/* Status bar — hidden in embedded filing layout to save vertical space */}
+        {!embedded && (
         <div className="bg-[#112d56] px-4 py-1.5">
           <div className="max-w-5xl mx-auto flex items-center justify-between text-[11px] text-blue-300">
             <div className="flex items-center gap-4">
@@ -162,6 +172,7 @@ export default function Header({
             </span>
           </div>
         </div>
+        )}
       </header>
 
       {/* Citizen Profile Drawer */}

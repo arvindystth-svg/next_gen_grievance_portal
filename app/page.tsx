@@ -152,20 +152,20 @@ function StepIndicator({
                     ? "Please wait for analysis to finish"
                     : undefined
                 }
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
                   step.num < current
                     ? "bg-green-500 text-white"
                     : step.num === current
-                    ? "bg-[#1a3c6e] text-white shadow-lg scale-110"
+                    ? "bg-[#1a3c6e] text-white shadow-md scale-105"
                     : step.num <= maxReached
                     ? "bg-blue-100 text-blue-700"
                     : "bg-slate-200 text-slate-400"
                 } ${navigable ? "cursor-pointer hover:scale-105 hover:shadow-md" : "cursor-default"}`}
               >
-                {step.num < current ? <CheckCircle2 size={14} /> : step.num}
+                {step.num < current ? <CheckCircle2 size={11} /> : step.num}
               </button>
               <span
-                className={`text-[10px] mt-1 font-medium text-center leading-tight max-w-[60px] ${
+                className={`text-[9px] mt-0.5 font-medium text-center leading-tight max-w-[48px] ${
                   step.num === current
                     ? "text-[#1a3c6e]"
                     : navigable
@@ -178,7 +178,7 @@ function StepIndicator({
             </div>
             {i < steps.length - 1 && (
               <div
-                className={`w-6 sm:w-10 h-0.5 mb-4 mx-0.5 transition-colors ${
+                className={`w-5 sm:w-8 h-0.5 mb-3 mx-0.5 transition-colors ${
                   step.num < current ? "bg-green-400" : "bg-slate-200"
                 }`}
               />
@@ -678,47 +678,47 @@ export default function Home() {
           complaintCount={complaints.length}
         />
 
-        <div className="max-w-2xl mx-auto px-4 pt-4 pb-3">
-          <div className="text-center mb-4">
-            <h2 className="text-2xl font-bold text-[#1a3c6e]">
+        <div className="max-w-2xl mx-auto px-4 pt-2 pb-2">
+          <div className="text-center mb-2">
+            <h2 className="text-lg font-bold text-[#1a3c6e] leading-tight">
               {activeView === "history" ? "My Complaint History" : "File a Civic Grievance"}
             </h2>
-            <p className="text-slate-500 text-sm mt-1">
-              {activeView === "history"
-                ? "Track status, resolutions, and rate closed complaints"
-                : "AI-powered routing to BBMP, BWSSB & BESCOM · Bengaluru Municipal Services"}
-            </p>
+            {activeView === "history" && (
+              <p className="text-slate-500 text-xs mt-0.5">
+                Track status, resolutions, and rate closed complaints
+              </p>
+            )}
           </div>
 
-          <div className="flex gap-2 mb-3 p-1 bg-slate-200/60 rounded-xl">
+          <div className="flex gap-1.5 mb-2 p-0.5 bg-slate-200/60 rounded-lg">
             <button
               type="button"
               onClick={() => {
                 if (step === 5) handleReset();
                 setActiveView("file");
               }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
                 activeView === "file"
                   ? "bg-white text-[#1a3c6e] shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              <PlusCircle size={16} />
+              <PlusCircle size={14} />
               File Complaint
             </button>
             <button
               type="button"
               onClick={() => setActiveView("history")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
                 activeView === "history"
                   ? "bg-white text-[#1a3c6e] shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              <History size={16} />
+              <History size={14} />
               My Complaints
               {complaints.length > 0 && (
-                <span className="bg-[#1a3c6e] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                <span className="bg-[#1a3c6e] text-white text-[9px] font-bold px-1 py-0 rounded-full min-w-[14px] text-center">
                   {complaints.length}
                 </span>
               )}
@@ -726,7 +726,7 @@ export default function Home() {
           </div>
 
           {activeView === "file" && step !== 5 && (
-            <div className="pt-1 pb-1">
+            <div className="pb-0.5">
               <StepIndicator
                 current={step}
                 maxReached={maxStepReached}
@@ -740,7 +740,7 @@ export default function Home() {
       </div>
 
       <main ref={contentScrollRef} className="flex-1 overflow-y-auto overscroll-contain">
-        <div className="max-w-2xl mx-auto px-4 pb-12 pt-4">
+        <div className="max-w-2xl mx-auto px-4 pb-12 pt-3">
 
         {/* ── HISTORY VIEW ─────────────────────────────────────────── */}
         {activeView === "history" && (
