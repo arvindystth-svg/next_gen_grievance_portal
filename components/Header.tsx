@@ -17,6 +17,8 @@ interface HeaderProps {
   onLanguageChange: (code: string) => void;
   isOnline: boolean;
   offlineQueueCount: number;
+  onMyComplaintsClick?: () => void;
+  complaintCount?: number;
 }
 
 export default function Header({
@@ -24,6 +26,8 @@ export default function Header({
   onLanguageChange,
   isOnline,
   offlineQueueCount,
+  onMyComplaintsClick,
+  complaintCount = 0,
 }: HeaderProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
@@ -105,10 +109,20 @@ export default function Header({
                 )}
               </div>
 
-              {/* Notifications */}
-              <button className="relative p-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors">
+              {/* My complaints */}
+              <button
+                type="button"
+                onClick={onMyComplaintsClick}
+                className="relative p-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                title="My Complaints"
+                aria-label="View my complaints"
+              >
                 <Bell size={14} />
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-orange-400 rounded-full" />
+                {complaintCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-orange-400 text-[#1a3c6e] rounded-full text-[9px] font-bold flex items-center justify-center">
+                    {complaintCount > 9 ? "9+" : complaintCount}
+                  </span>
+                )}
               </button>
 
               {/* Profile button */}

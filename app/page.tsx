@@ -6,6 +6,12 @@ import Header from "@/components/Header";
 import VoiceTextRecorder from "@/components/VoiceTextRecorder";
 import AdvisoryCard from "@/components/AdvisoryCard";
 import DuplicateBanner from "@/components/DuplicateBanner";
+import ComplaintHistory from "@/components/ComplaintHistory";
+import {
+  getComplaintHistory,
+  saveComplaintToHistory,
+  ComplaintRecord,
+} from "@/lib/complaintHistory";
 import {
   SEED_GRIEVANCES,
   SeedGrievance,
@@ -23,6 +29,8 @@ import {
   FileText,
   Tag,
   MapPin,
+  History,
+  PlusCircle,
 } from "lucide-react";
 
 // Dynamically import Leaflet-based LocationPicker (no SSR)
@@ -70,6 +78,7 @@ interface AnalysisResult {
 }
 
 type Step = 1 | 2 | 3 | 4;
+type ActiveView = "file" | "history";
 
 const URGENCY_CONFIG = {
   HIGH: { color: "bg-red-100 text-red-700 border-red-300", dot: "bg-red-500", label: "High Priority" },
@@ -142,6 +151,7 @@ function StepIndicator({ current }: { current: Step }) {
 }
 
 export default function Home() {
+  const [activeView, setActiveView] = useState<ActiveView>("file");
   const [step, setStep] = useState<Step>(1);
   const [language, setLanguage] = useState("en");
   const [grievanceText, setGrievanceText] = useState("");
@@ -164,6 +174,11 @@ export default function Home() {
     zone?: string;
     locality?: string;
   } | null>(null);
+  const [complaints, setComplaints] = useState<ComplaintRecord[]>([]);
+
+  useEffect(() => {
+    setComplaints(getComplaintHistory());
+  }, []);
 
   useEffect(() => {
     const update = () => setIsOnline(navigator.onLine);
@@ -185,10 +200,10 @@ export default function Home() {
     }
   }, [grievanceText, location, selectedCategory]);
 
-  // Scroll to top when workflow step changes
+  // Scroll to top when workflow step or view changes
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [step]);
+  }, [step, activeView]);
 
   const handleAnalyze = async () => {
     if (!grievanceText.trim() || grievanceText.trim().length < 10) {
@@ -244,15 +259,33 @@ export default function Home() {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    // Simulate submission (would be a real API call in production)
     await new Promise((r) => setTimeout(r, 1500));
     const id = `GRV-BLR-${Date.now().toString().slice(-6)}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+
+    if (analysisResult) {
+      const record: ComplaintRecord = {
+        id,
+        raisedAt: new Date().toISOString(),
+        rawText: grievanceText,
+        aiSummary: editedSummary,
+        status: "Submitted",
+        localDepartments: analysisResult.local_departments?.length
+          ? analysisResult.local_departments
+          : [analysisResult.local_department],
+        urgency: analysisResult.urgency,
+        ward: analysisResult.location.ward,
+        locality: analysisResult.location.locality,
+      };
+      setComplaints(saveComplaintToHistory(record));
+    }
+
     setSubmittedId(id);
     setStep(4);
     setIsSubmitting(false);
   };
 
   const handleReset = () => {
+    setActiveView("file");
     setStep(1);
     setGrievanceText("");
     setLocation(null);
@@ -274,23 +307,67 @@ export default function Home() {
         onLanguageChange={setLanguage}
         isOnline={isOnline}
         offlineQueueCount={offlineQueueCount}
+        onMyComplaintsClick={() => setActiveView("history")}
+        complaintCount={complaints.length}
       />
 
       <main className="max-w-2xl mx-auto px-4 py-6 pb-12">
         {/* Hero */}
         <div className="text-center mb-6">
           <h2 className="text-2xl font-bold text-[#1a3c6e]">
-            File a Civic Grievance
+            {activeView === "history" ? "My Complaint History" : "File a Civic Grievance"}
           </h2>
           <p className="text-slate-500 text-sm mt-1">
-            AI-powered routing to BBMP, BWSSB &amp; BESCOM · Bengaluru Municipal Services
+            {activeView === "history"
+              ? "Track status, resolutions, and rate closed complaints"
+              : "AI-powered routing to BBMP, BWSSB & BESCOM · Bengaluru Municipal Services"}
           </p>
         </div>
 
-        <StepIndicator current={step} />
+        {activeView === "file" && <StepIndicator current={step} />}
 
-        {/* ── STEP 1: Input & Location ─────────────────────────────── */}
-        {(step === 1 || step === 2) && (
+        {/* View tabs */}
+        <div className="flex gap-2 mb-5 p-1 bg-slate-200/60 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setActiveView("file")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              activeView === "file"
+                ? "bg-white text-[#1a3c6e] shadow-sm"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <PlusCircle size={16} />
+            File Complaint
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView("history")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              activeView === "history"
+                ? "bg-white text-[#1a3c6e] shadow-sm"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <History size={16} />
+            My Complaints
+            {complaints.length > 0 && (
+              <span className="bg-[#1a3c6e] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                {complaints.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* ── HISTORY VIEW ─────────────────────────────────────────── */}
+        {activeView === "history" && (
+          <ComplaintHistory complaints={complaints} onUpdate={setComplaints} />
+        )}
+
+        {/* ── FILE COMPLAINT VIEW ──────────────────────────────────── */}
+        {activeView === "file" && (
+        <>
+        {(step === 1 && !isAnalyzing) && (
           <div className="space-y-4">
             {/* Complaint description */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -307,7 +384,15 @@ export default function Home() {
                   text={grievanceText}
                   onTextChange={setGrievanceText}
                   language={language}
+                  onAnalyze={handleAnalyze}
+                  isAnalyzing={isAnalyzing}
                 />
+                {analysisError && (
+                  <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2 text-red-700 text-sm">
+                    <AlertCircle size={16} className="flex-shrink-0" />
+                    {analysisError}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -339,44 +424,10 @@ export default function Home() {
               />
             )}
 
-            {/* Error */}
-            {analysisError && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2 text-red-700 text-sm">
-                <AlertCircle size={16} className="flex-shrink-0" />
-                {analysisError}
-              </div>
-            )}
-
-            {/* Analyze button */}
-            <button
-              onClick={handleAnalyze}
-              disabled={isAnalyzing || !grievanceText.trim()}
-              className="w-full bg-[#1a3c6e] hover:bg-[#2563eb] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-3 text-base"
-            >
-              {isAnalyzing ? (
-                <>
-                  <Loader2 size={20} className="animate-spin" />
-                  Analyzing with AI…
-                </>
-              ) : (
-                <>
-                  <Sparkles size={20} />
-                  ✨ Summarize &amp; Analyze Complaint
-                  <ChevronRight size={18} />
-                </>
-              )}
-            </button>
-
-            {!grievanceText.trim() && (
-              <p className="text-center text-xs text-slate-400">
-                Fill in your grievance description above to continue
-              </p>
-            )}
           </div>
         )}
 
-        {/* ── STEP 2: Analyzing loader ──────────────────────────────── */}
-        {step === 2 && isAnalyzing && (
+        {activeView === "file" && step === 2 && isAnalyzing && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-10 text-center mt-4">
             <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Sparkles size={28} className="text-blue-600 animate-pulse" />
@@ -406,7 +457,7 @@ export default function Home() {
         )}
 
         {/* ── STEP 3: Review & Edit ─────────────────────────────────── */}
-        {step === 3 && analysisResult && (
+        {activeView === "file" && step === 3 && analysisResult && (
           <div className="space-y-5">
             {/* AI Analysis header */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
@@ -606,7 +657,7 @@ export default function Home() {
         )}
 
         {/* ── STEP 4: Submitted ─────────────────────────────────────── */}
-        {step === 4 && submittedId && (
+        {activeView === "file" && step === 4 && submittedId && (
           <div className="space-y-5">
             {/* Success */}
             <div className="bg-white rounded-2xl shadow-sm border border-green-200 p-8 text-center">
@@ -714,6 +765,16 @@ export default function Home() {
                   Download Receipt
                 </button>
                 <button
+                  onClick={() => {
+                    setActiveView("history");
+                    setStep(1);
+                  }}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-[#1a3c6e] font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  <History size={16} />
+                  View in My Complaints
+                </button>
+                <button
                   onClick={handleReset}
                   className="flex-1 bg-[#1a3c6e] hover:bg-[#2563eb] text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
                 >
@@ -723,6 +784,8 @@ export default function Home() {
               </div>
             </div>
           </div>
+        )}
+        </>
         )}
       </main>
 
