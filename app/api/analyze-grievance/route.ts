@@ -4,11 +4,14 @@ import {
   sarvamExtractLocation,
   sarvamAnalyzeGrievance,
 } from "@/lib/sarvam";
+import { mergeDepartmentRouting } from "@/lib/departmentDetection";
 
 interface AnalysisResult {
   summary: string;
   cpgrams_category: string;
+  cpgrams_categories: string[];
   local_department: string;
+  local_departments: string[];
   urgency: "HIGH" | "MEDIUM" | "LOW";
   location: {
     locality: string;
@@ -40,9 +43,11 @@ const SYSTEM_PROMPT = `You are an AI grievance classifier for the Indian governm
 Analyze the citizen's specific complaint text and return valid JSON with exactly this schema:
 
 {
-  "summary": "Two formal sentences in official governance English summarizing the citizen's specific problem.",
-  "cpgrams_category": "Relevant Central Ministry",
-  "local_department": "Responsible local body",
+  "summary": "Two to four formal sentences in official governance English. If the complaint covers multiple issues (roads, drainage, street lights, etc.), address each concisely in polished prose.",
+  "cpgrams_category": "Primary Central Ministry (most urgent issue)",
+  "cpgrams_categories": ["All relevant Central Ministries — include every ministry applicable to issues mentioned"],
+  "local_department": "Primary local body (most urgent issue)",
+  "local_departments": ["All responsible Bengaluru bodies — list EVERY department for issues mentioned, e.g. BBMP Roads, BBMP Storm Water Drains, BBMP Electrical, BESCOM, BWSSB"],
   "urgency": "HIGH | MEDIUM | LOW",
   "location": {
     "locality": "string",
@@ -62,7 +67,8 @@ Analyze the citizen's specific complaint text and return valid JSON with exactly
 }
 
 Classification rules:
-- Base summary, cpgrams_category, local_department, and urgency on the ACTUAL complaint (street lights, drainage, potholes, garbage, water leak, power outage, parks, noise, etc.).
+- If the complaint mentions MULTIPLE issues (e.g. roads AND drainage AND street lights), you MUST list ALL applicable departments in local_departments and ALL ministries in cpgrams_categories.
+- Base summary, departments, and urgency on the ACTUAL complaint topics mentioned.
 - cpgrams_category examples: Ministry of Power, Ministry of Housing and Urban Affairs, Ministry of Road Transport and Highways, Ministry of Jal Shakti.
 - local_department examples: BBMP Electrical, BBMP Storm Water Drains, BBMP Roads & Infrastructure, BBMP Solid Waste Management, BWSSB Water Supply, BESCOM.
 - urgency HIGH for safety risks, hospital/school proximity, flooding, burst pipes, live wires; MEDIUM for service disruption; LOW for minor nuisances.
@@ -77,7 +83,9 @@ function waterSupplyMockFallback(ctx: LocationContext): AnalysisResult {
     summary:
       "A water supply infrastructure failure has been reported in the Koramangala area. The complaint indicates a pipe burst or major leak requiring immediate BWSSB intervention to prevent water wastage and road damage.",
     cpgrams_category: "Ministry of Housing and Urban Affairs",
+    cpgrams_categories: ["Ministry of Housing and Urban Affairs"],
     local_department: "BBMP Engineering / BWSSB Water Supply",
+    local_departments: ["BBMP Engineering / BWSSB Water Supply"],
     urgency: "HIGH",
     location: {
       locality: "Koramangala 4th Block",
@@ -109,21 +117,20 @@ function normalizeUrgency(value: unknown): "HIGH" | "MEDIUM" | "LOW" {
 
 function normalizeAnalysis(
   raw: Partial<AnalysisResult>,
-  ctx: LocationContext
+  ctx: LocationContext,
+  citizenText: string
 ): AnalysisResult {
+  const departments = mergeDepartmentRouting(raw, citizenText);
+
   return {
     summary:
       typeof raw.summary === "string" && raw.summary.trim()
         ? raw.summary.trim()
         : "A civic grievance has been filed by a resident in Bengaluru. The issue requires prompt attention and field inspection by the appropriate municipal authority.",
-    cpgrams_category:
-      typeof raw.cpgrams_category === "string" && raw.cpgrams_category.trim()
-        ? raw.cpgrams_category.trim()
-        : "Ministry of Housing and Urban Affairs",
-    local_department:
-      typeof raw.local_department === "string" && raw.local_department.trim()
-        ? raw.local_department.trim()
-        : "BBMP General Services",
+    cpgrams_category: departments.cpgrams_category,
+    cpgrams_categories: departments.cpgrams_categories,
+    local_department: departments.local_department,
+    local_departments: departments.local_departments,
     urgency: normalizeUrgency(raw.urgency),
     location: {
       locality:
@@ -222,7 +229,7 @@ async function openAIAnalysis(
         { role: "user", content: userMessage },
       ],
       temperature: 0.2,
-      max_tokens: 900,
+      max_tokens: 1200,
       response_format: { type: "json_object" },
     }),
   });
@@ -239,7 +246,7 @@ async function openAIAnalysis(
   }
 
   const parsed = JSON.parse(content) as Partial<AnalysisResult>;
-  return normalizeAnalysis(parsed, ctx);
+  return normalizeAnalysis(parsed, ctx, citizenText);
 }
 
 async function sarvamAnalysis(
@@ -248,7 +255,7 @@ async function sarvamAnalysis(
   apiKey: string
 ): Promise<AnalysisResult> {
   const parsed = await sarvamAnalyzeGrievance(citizenText, ctx, SYSTEM_PROMPT, apiKey);
-  return normalizeAnalysis(parsed as Partial<AnalysisResult>, ctx);
+  return normalizeAnalysis(parsed as Partial<AnalysisResult>, ctx, citizenText);
 }
 
 export async function POST(req: NextRequest) {
@@ -316,6 +323,10 @@ export async function POST(req: NextRequest) {
       result = waterSupplyMockFallback(locationCtx);
       modelUsed = "water-supply-mock-fallback";
     }
+
+    // Always merge keyword-detected departments so multi-issue complaints route correctly
+    const deptMerge = mergeDepartmentRouting(result, citizenText);
+    result = { ...result, ...deptMerge };
 
     return NextResponse.json({
       ...result,

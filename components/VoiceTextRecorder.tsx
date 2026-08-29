@@ -25,7 +25,12 @@ const SPEECH_LANG_MAP: Record<string, string> = {
   hin: "en-IN",
 };
 
-const MAX_RECORDING_SEC = 30;
+const MAX_WORDS = 1000;
+const SARVAM_MAX_AUDIO_SEC = 30; // Sarvam REST API limit — refinement only for short clips
+
+function countWords(value: string): number {
+  return value.trim() ? value.trim().split(/\s+/).length : 0;
+}
 
 interface SpeechRecognitionResult {
   readonly isFinal: boolean;
@@ -115,7 +120,8 @@ export default function VoiceTextRecorder({
   /** Background Sarvam refinement — does not block live text already shown */
   const refineWithSarvam = useCallback(
     async (blob: Blob, duration: number, liveText: string) => {
-      if (blob.size < 1000 || duration < 1) return;
+      // Sarvam REST API only supports ≤30s clips — skip silently for longer speech
+      if (duration > SARVAM_MAX_AUDIO_SEC || blob.size < 1000 || duration < 1) return;
 
       setIsRefining(true);
       try {
@@ -194,7 +200,9 @@ export default function VoiceTextRecorder({
       const parts = [baseTextRef.current, sessionFinal.trim(), sessionInterim.trim()].filter(
         Boolean
       );
-      onTextChange(parts.join(" "));
+      const next = parts.join(" ");
+      // Allow up to MAX_WORDS — do not cut off mid-speech
+      onTextChange(next);
     };
 
     recognition.onerror = (event) => {
@@ -263,11 +271,9 @@ export default function VoiceTextRecorder({
 
       mediaRecorder.start(250);
 
+      // Track duration only — no auto-stop; user controls when to finish
       timerRef.current = setInterval(() => {
         recordingSecondsRef.current += 1;
-        if (recordingSecondsRef.current >= MAX_RECORDING_SEC) {
-          stopListening();
-        }
       }, 1000);
     } catch {
       // Mic already in use by speech recognition in some browsers — live STT still works
@@ -299,6 +305,8 @@ export default function VoiceTextRecorder({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language]);
 
+  const wordCount = countWords(text);
+
   return (
     <div className="space-y-2">
       <div className="flex gap-3 items-start">
@@ -324,8 +332,8 @@ export default function VoiceTextRecorder({
                 Refining…
               </span>
             )}
-            <span className={`text-xs ${text.length > 500 ? "text-red-500" : "text-slate-400"}`}>
-              {text.length}/500
+            <span className={`text-xs ${wordCount > MAX_WORDS ? "text-amber-600" : "text-slate-400"}`}>
+              {wordCount}/{MAX_WORDS} words
             </span>
             {text.length > 0 && !isListening && (
               <button
@@ -391,7 +399,7 @@ export default function VoiceTextRecorder({
       )}
 
       <p className="text-[10px] text-slate-400 px-1">
-        Live voice-to-text · Sarvam AI refines Indian languages on stop · Audio is not saved
+        Live voice-to-text · Speak freely (up to {MAX_WORDS} words) · Tap mic to stop · Audio is not saved
       </p>
     </div>
   );

@@ -47,7 +47,9 @@ interface LocationData {
 interface AnalysisResult {
   summary: string;
   cpgrams_category: string;
+  cpgrams_categories: string[];
   local_department: string;
+  local_departments: string[];
   urgency: "HIGH" | "MEDIUM" | "LOW";
   location: {
     locality: string;
@@ -183,6 +185,11 @@ export default function Home() {
     }
   }, [grievanceText, location, selectedCategory]);
 
+  // Scroll to top when workflow step changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [step]);
+
   const handleAnalyze = async () => {
     if (!grievanceText.trim() || grievanceText.trim().length < 10) {
       setAnalysisError("Please describe your grievance in at least 10 characters.");
@@ -257,6 +264,7 @@ export default function Home() {
     setDuplicateDismissed(false);
     setSubmittedId(null);
     setSuggestedLocation(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
@@ -450,9 +458,37 @@ export default function Home() {
                   <Tag size={12} />
                   Classification &amp; Routing
                 </label>
-                <div className="flex flex-wrap gap-2">
-                  <Badge color="blue">{analysisResult.local_department}</Badge>
-                  <Badge color="purple">{analysisResult.cpgrams_category}</Badge>
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1.5">
+                      Local Departments
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {(analysisResult.local_departments?.length
+                        ? analysisResult.local_departments
+                        : [analysisResult.local_department]
+                      ).map((dept) => (
+                        <Badge key={dept} color="blue">
+                          {dept}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1.5">
+                      Central CPGRAMS Ministries
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {(analysisResult.cpgrams_categories?.length
+                        ? analysisResult.cpgrams_categories
+                        : [analysisResult.cpgrams_category]
+                      ).map((cat) => (
+                        <Badge key={cat} color="purple">
+                          {cat}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
                   <Badge
                     color={
                       analysisResult.urgency === "HIGH"
@@ -602,32 +638,54 @@ export default function Home() {
                 <div className="text-left space-y-2 mb-6">
                   <p className="font-semibold text-slate-700 text-sm">What happens next:</p>
                   <div className="space-y-2">
-                    {[
-                      { icon: "📩", label: "SMS confirmation sent to +91 98765 43210" },
-                      {
-                        icon: "🏛️",
-                        label: `Routed to: ${analysisResult.local_department}`,
-                      },
-                      {
-                        icon: "⏱️",
-                        label:
-                          analysisResult.urgency === "HIGH"
-                            ? "Field crew dispatch within 24 hours (HIGH priority)"
-                            : "Response within 48-72 hours",
-                      },
-                      {
-                        icon: "📋",
-                        label: `CPGRAMS category: ${analysisResult.cpgrams_category}`,
-                      },
-                    ].map((item, i) => (
-                      <div
-                        key={i}
-                        className="flex items-start gap-3 bg-slate-50 rounded-lg px-3 py-2"
-                      >
-                        <span className="text-base">{item.icon}</span>
-                        <span className="text-sm text-slate-600">{item.label}</span>
+                    <div className="flex items-start gap-3 bg-slate-50 rounded-lg px-3 py-2">
+                      <span className="text-base">📩</span>
+                      <span className="text-sm text-slate-600">
+                        SMS confirmation sent to +91 98765 43210
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-3 bg-slate-50 rounded-lg px-3 py-2">
+                      <span className="text-base">🏛️</span>
+                      <div className="text-sm text-slate-600">
+                        <span className="font-medium">Routed to local departments:</span>
+                        <ul className="mt-1 space-y-0.5">
+                          {(analysisResult.local_departments?.length
+                            ? analysisResult.local_departments
+                            : [analysisResult.local_department]
+                          ).map((dept) => (
+                            <li key={dept} className="flex items-center gap-1.5">
+                              <ChevronRight size={10} className="text-blue-400 flex-shrink-0" />
+                              {dept}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                    ))}
+                    </div>
+                    <div className="flex items-start gap-3 bg-slate-50 rounded-lg px-3 py-2">
+                      <span className="text-base">📋</span>
+                      <div className="text-sm text-slate-600">
+                        <span className="font-medium">CPGRAMS ministries notified:</span>
+                        <ul className="mt-1 space-y-0.5">
+                          {(analysisResult.cpgrams_categories?.length
+                            ? analysisResult.cpgrams_categories
+                            : [analysisResult.cpgrams_category]
+                          ).map((cat) => (
+                            <li key={cat} className="flex items-center gap-1.5">
+                              <ChevronRight size={10} className="text-purple-400 flex-shrink-0" />
+                              {cat}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3 bg-slate-50 rounded-lg px-3 py-2">
+                      <span className="text-base">⏱️</span>
+                      <span className="text-sm text-slate-600">
+                        {analysisResult.urgency === "HIGH"
+                          ? "Field crew dispatch within 24 hours (HIGH priority)"
+                          : "Response within 48-72 hours"}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -635,7 +693,15 @@ export default function Home() {
               <div className="flex gap-3">
                 <button
                   onClick={() => {
-                    const text = `CPGRAMS Complaint: ${submittedId}\n${editedSummary}\nDepartment: ${analysisResult?.local_department}\nPriority: ${analysisResult?.urgency}`;
+                    const depts = (analysisResult?.local_departments?.length
+                      ? analysisResult.local_departments
+                      : [analysisResult?.local_department]
+                    ).filter(Boolean).join(", ");
+                    const cats = (analysisResult?.cpgrams_categories?.length
+                      ? analysisResult.cpgrams_categories
+                      : [analysisResult?.cpgrams_category]
+                    ).filter(Boolean).join(", ");
+                    const text = `CPGRAMS Complaint: ${submittedId}\n${editedSummary}\nDepartments: ${depts}\nCPGRAMS: ${cats}\nPriority: ${analysisResult?.urgency}`;
                     const blob = new Blob([text], { type: "text/plain" });
                     const a = document.createElement("a");
                     a.href = URL.createObjectURL(blob);
