@@ -26,10 +26,8 @@ export default function DepartmentSelector({
   const [query, setQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const filtered = options.filter(
-    (opt) =>
-      !selected.includes(opt) &&
-      opt.toLowerCase().includes(query.trim().toLowerCase())
+  const filtered = options.filter((opt) =>
+    opt.toLowerCase().includes(query.trim().toLowerCase())
   );
 
   useEffect(() => {
@@ -42,9 +40,12 @@ export default function DepartmentSelector({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const add = (dept: string) => {
-    onChange([...selected, dept]);
-    setQuery("");
+  const toggle = (dept: string) => {
+    if (selected.includes(dept)) {
+      onChange(selected.filter((d) => d !== dept));
+    } else {
+      onChange([...selected, dept]);
+    }
   };
 
   const remove = (dept: string) => {
@@ -55,6 +56,11 @@ export default function DepartmentSelector({
     <div ref={containerRef} className="relative">
       <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">
         {label}
+        {selected.length > 1 && (
+          <span className="ml-1.5 text-[10px] font-bold text-blue-600 normal-case tracking-normal">
+            ({selected.length} selected)
+          </span>
+        )}
       </label>
       {hint && <p className="text-xs text-slate-400 mb-2">{hint}</p>}
 
@@ -88,7 +94,9 @@ export default function DepartmentSelector({
       >
         <Search size={14} className="text-slate-400 flex-shrink-0" />
         <span className="flex-1 text-slate-400 truncate">
-          {selected.length === 0 ? placeholder : "Add or change department…"}
+          {selected.length === 0
+            ? placeholder
+            : "Search to add or remove departments…"}
         </span>
         <ChevronDown
           size={14}
@@ -96,7 +104,7 @@ export default function DepartmentSelector({
         />
       </button>
 
-      {/* Dropdown */}
+      {/* Multi-select dropdown */}
       {open && (
         <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
           <div className="p-2 border-b border-slate-100">
@@ -109,26 +117,47 @@ export default function DepartmentSelector({
               autoFocus
             />
           </div>
-          <ul className="max-h-48 overflow-y-auto py-1">
+          <ul className="max-h-52 overflow-y-auto py-1">
             {filtered.length === 0 ? (
               <li className="px-4 py-3 text-sm text-slate-400 text-center">
-                {query ? "No matching departments" : "All departments selected"}
+                No matching departments
               </li>
             ) : (
-              filtered.map((dept) => (
-                <li key={dept}>
-                  <button
-                    type="button"
-                    onClick={() => add(dept)}
-                    className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 flex items-center justify-between gap-2 transition-colors"
-                  >
-                    <span>{dept}</span>
-                    <Check size={14} className="text-blue-500 opacity-0 group-hover:opacity-100" />
-                  </button>
-                </li>
-              ))
+              filtered.map((dept) => {
+                const isSelected = selected.includes(dept);
+                return (
+                  <li key={dept}>
+                    <button
+                      type="button"
+                      onClick={() => toggle(dept)}
+                      className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors ${
+                        isSelected
+                          ? "bg-blue-50 text-blue-800"
+                          : "text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <span
+                        className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+                          isSelected
+                            ? "bg-blue-600 border-blue-600"
+                            : "border-slate-300 bg-white"
+                        }`}
+                      >
+                        {isSelected && <Check size={10} className="text-white" />}
+                      </span>
+                      <span className="flex-1">{dept}</span>
+                    </button>
+                  </li>
+                );
+              })
             )}
           </ul>
+          {selected.length > 0 && (
+            <div className="px-3 py-2 border-t border-slate-100 bg-slate-50 text-[10px] text-slate-500">
+              Tap items to toggle selection · {selected.length} department
+              {selected.length !== 1 ? "s" : ""} chosen
+            </div>
+          )}
         </div>
       )}
     </div>

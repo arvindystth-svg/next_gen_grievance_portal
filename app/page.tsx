@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import Header from "@/components/Header";
 import VoiceTextRecorder from "@/components/VoiceTextRecorder";
@@ -30,6 +30,7 @@ import {
   Loader2,
   AlertCircle,
   ChevronRight,
+  ChevronLeft,
   RotateCcw,
   Download,
   FileText,
@@ -38,6 +39,7 @@ import {
   History,
   PlusCircle,
 } from "lucide-react";
+import { rerouteFromSummary } from "@/lib/summaryRouting";
 
 // Dynamically import Leaflet-based LocationPicker (no SSR)
 const LocationPicker = dynamic(() => import("@/components/LocationPicker"), {
@@ -106,47 +108,92 @@ function findDuplicate(
   return null;
 }
 
-function StepIndicator({ current }: { current: Step }) {
+function canNavigateTo(target: Step, current: Step, maxReached: Step): boolean {
+  if (target === 2 || target === current) return false;
+  return target <= maxReached;
+}
+
+function StepIndicator({
+  current,
+  maxReached,
+  onStepClick,
+}: {
+  current: Step;
+  maxReached: Step;
+  onStepClick: (step: Step) => void;
+}) {
   const steps = [
-    { num: 1, label: "Describe & Locate" },
-    { num: 2, label: "AI Analysis" },
-    { num: 3, label: "Review & Edit" },
-    { num: 4, label: "Submit" },
+    { num: 1 as Step, label: "Describe & Locate" },
+    { num: 2 as Step, label: "AI Analysis" },
+    { num: 3 as Step, label: "Review & Edit" },
+    { num: 4 as Step, label: "Submit" },
   ];
   return (
     <div className="flex items-center justify-center gap-0 mb-6">
-      {steps.map((step, i) => (
-        <div key={step.num} className="flex items-center">
-          <div className="flex flex-col items-center">
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
-                step.num < current
-                  ? "bg-green-500 text-white"
-                  : step.num === current
-                  ? "bg-[#1a3c6e] text-white shadow-lg scale-110"
-                  : "bg-slate-200 text-slate-400"
-              }`}
-            >
-              {step.num < current ? <CheckCircle2 size={14} /> : step.num}
+      {steps.map((step, i) => {
+        const navigable = canNavigateTo(step.num, current, maxReached);
+        return (
+          <div key={step.num} className="flex items-center">
+            <div className="flex flex-col items-center">
+              <button
+                type="button"
+                disabled={!navigable}
+                onClick={() => navigable && onStepClick(step.num)}
+                title={
+                  navigable
+                    ? `Go back to ${step.label}`
+                    : step.num === 2
+                    ? "AI analysis runs automatically"
+                    : undefined
+                }
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                  step.num < current
+                    ? "bg-green-500 text-white"
+                    : step.num === current
+                    ? "bg-[#1a3c6e] text-white shadow-lg scale-110"
+                    : step.num <= maxReached
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-slate-200 text-slate-400"
+                } ${navigable ? "cursor-pointer hover:scale-105 hover:shadow-md" : "cursor-default"}`}
+              >
+                {step.num < current ? <CheckCircle2 size={14} /> : step.num}
+              </button>
+              <span
+                className={`text-[10px] mt-1 font-medium text-center leading-tight max-w-[60px] ${
+                  step.num === current
+                    ? "text-[#1a3c6e]"
+                    : navigable
+                    ? "text-blue-600"
+                    : "text-slate-400"
+                }`}
+              >
+                {step.label}
+              </span>
             </div>
-            <span
-              className={`text-[10px] mt-1 font-medium text-center leading-tight max-w-[60px] ${
-                step.num === current ? "text-[#1a3c6e]" : "text-slate-400"
-              }`}
-            >
-              {step.label}
-            </span>
+            {i < steps.length - 1 && (
+              <div
+                className={`w-12 sm:w-20 h-0.5 mb-4 mx-1 transition-colors ${
+                  step.num < current ? "bg-green-400" : "bg-slate-200"
+                }`}
+              />
+            )}
           </div>
-          {i < steps.length - 1 && (
-            <div
-              className={`w-12 sm:w-20 h-0.5 mb-4 mx-1 transition-colors ${
-                step.num < current ? "bg-green-400" : "bg-slate-200"
-              }`}
-            />
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
+  );
+}
+
+function StepBackButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-[#1a3c6e] font-medium transition-colors"
+    >
+      <ChevronLeft size={16} />
+      {label}
+    </button>
   );
 }
 
@@ -177,6 +224,9 @@ export default function Home() {
   const [complaints, setComplaints] = useState<ComplaintRecord[]>([]);
   const [selectedLocalDepartments, setSelectedLocalDepartments] = useState<string[]>([]);
   const [selectedCpgramsCategories, setSelectedCpgramsCategories] = useState<string[]>([]);
+  const [maxStepReached, setMaxStepReached] = useState<Step>(1);
+  const [routingUpdated, setRoutingUpdated] = useState(false);
+  const lastAutoRoutedSummary = useRef<string | null>(null);
 
   useEffect(() => {
     setComplaints(getComplaintHistory());
@@ -206,6 +256,64 @@ export default function Home() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [step, activeView]);
+
+  // Re-route departments & keywords when citizen edits the AI summary on step 3
+  useEffect(() => {
+    if (step !== 3 || !editedSummary.trim()) return;
+
+    const timer = setTimeout(() => {
+      if (lastAutoRoutedSummary.current === editedSummary) return;
+
+      const result = rerouteFromSummary(editedSummary);
+      lastAutoRoutedSummary.current = editedSummary;
+
+      setSelectedLocalDepartments(result.localDepartments);
+      setSelectedCpgramsCategories(result.cpgramsCategories);
+      setAnalysisResult((prev) =>
+        prev
+          ? {
+              ...prev,
+              keywords: result.keywords,
+              local_department: result.localDepartments[0],
+              local_departments: result.localDepartments,
+              cpgrams_category: result.cpgramsCategories[0],
+              cpgrams_categories: result.cpgramsCategories,
+            }
+          : null
+      );
+      setRoutingUpdated(true);
+      window.setTimeout(() => setRoutingUpdated(false), 2500);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [editedSummary, step]);
+
+  const goToStep = (target: Step) => {
+    if (!canNavigateTo(target, step, maxStepReached)) return;
+    if (step === 4) setSubmittedId(null);
+    setIsAnalyzing(false);
+    setStep(target);
+  };
+
+  const applyDepartmentSelection = (localDepts: string[]) => {
+    const cpgrams = cpgramsForLocalDepartments(
+      localDepts.length > 0 ? localDepts : ["BBMP General Services"]
+    );
+    setSelectedLocalDepartments(localDepts);
+    setSelectedCpgramsCategories(cpgrams);
+    setAnalysisResult((prev) =>
+      prev
+        ? {
+            ...prev,
+            local_department: localDepts[0] || prev.local_department,
+            local_departments: localDepts,
+            cpgrams_category: cpgrams[0] || prev.cpgrams_category,
+            cpgrams_categories: cpgrams,
+          }
+        : null
+    );
+    lastAutoRoutedSummary.current = editedSummary;
+  };
 
   const handleAnalyze = async () => {
     if (!grievanceText.trim() || grievanceText.trim().length < 10) {
@@ -244,6 +352,7 @@ export default function Home() {
         : [data.cpgrams_category];
       setSelectedLocalDepartments(localDepts);
       setSelectedCpgramsCategories(cpgramsCats);
+      lastAutoRoutedSummary.current = data.summary;
 
       // If AI extracted a better location, suggest it
       if (data.location.latitude && data.location.longitude && !location) {
@@ -259,6 +368,7 @@ export default function Home() {
       }
 
       setStep(3);
+      setMaxStepReached((m) => (m < 3 ? 3 : m));
     } catch (err) {
       setAnalysisError(err instanceof Error ? err.message : "Unknown error occurred");
       setStep(1);
@@ -293,6 +403,7 @@ export default function Home() {
 
     setSubmittedId(id);
     setStep(4);
+    setMaxStepReached(4);
     setIsSubmitting(false);
   };
 
@@ -311,18 +422,13 @@ export default function Home() {
     setSuggestedLocation(null);
     setSelectedLocalDepartments([]);
     setSelectedCpgramsCategories([]);
+    setMaxStepReached(1);
+    lastAutoRoutedSummary.current = null;
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleLocalDepartmentsChange = (depts: string[]) => {
-    setSelectedLocalDepartments(depts);
-    if (depts.length > 0) {
-      const suggested = cpgramsForLocalDepartments(depts);
-      setSelectedCpgramsCategories((prev) => {
-        const merged = new Set([...prev, ...suggested]);
-        return Array.from(merged);
-      });
-    }
+    applyDepartmentSelection(depts);
   };
 
   return (
@@ -349,7 +455,13 @@ export default function Home() {
           </p>
         </div>
 
-        {activeView === "file" && <StepIndicator current={step} />}
+        {activeView === "file" && (
+          <StepIndicator
+            current={step}
+            maxReached={maxStepReached}
+            onStepClick={goToStep}
+          />
+        )}
 
         {/* View tabs */}
         <div className="flex gap-2 mb-5 p-1 bg-slate-200/60 rounded-xl">
@@ -394,6 +506,18 @@ export default function Home() {
         <>
         {(step === 1 && !isAnalyzing) && (
           <div className="space-y-4">
+            {maxStepReached >= 3 && (
+              <StepBackButton
+                label="Back to Review & Edit"
+                onClick={() => goToStep(3)}
+              />
+            )}
+            {maxStepReached >= 3 && (
+              <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700">
+                You returned to edit your complaint. Update the description or location, then tap{" "}
+                <strong>Summarize</strong> to refresh the AI analysis.
+              </div>
+            )}
             {/* Complaint description */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="bg-slate-50 border-b border-slate-200 px-5 py-4">
@@ -484,6 +608,10 @@ export default function Home() {
         {/* ── STEP 3: Review & Edit ─────────────────────────────────── */}
         {activeView === "file" && step === 3 && analysisResult && (
           <div className="space-y-5">
+            <StepBackButton
+              label="Back to Describe & Locate"
+              onClick={() => goToStep(1)}
+            />
             {/* AI Analysis header */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
               <div className="flex items-center justify-between mb-4">
@@ -524,8 +652,14 @@ export default function Home() {
                   className="w-full px-4 py-3 text-sm border-2 border-blue-200 bg-blue-50 rounded-xl focus:border-blue-500 focus:outline-none resize-none text-slate-800 focus:bg-white transition-colors"
                 />
                 <p className="text-xs text-slate-400 mt-1">
-                  ✏️ You can edit the AI-generated summary before submitting
+                  ✏️ Edit the summary to add more issues — department tags and keywords update automatically
                 </p>
+                {routingUpdated && (
+                  <p className="text-xs text-green-600 mt-1.5 flex items-center gap-1">
+                    <CheckCircle2 size={12} />
+                    Routing tags updated based on your edits
+                  </p>
+                )}
               </div>
 
               {/* Extracted keywords — directly below summary */}
@@ -558,7 +692,7 @@ export default function Home() {
 
                 <DepartmentSelector
                   label="Local Departments"
-                  hint="AI-suggested routing. Search and select the correct department if the suggestion is wrong."
+                  hint="Select one or more departments. Tags sync when you edit the summary above, or pick manually from the dropdown."
                   selected={selectedLocalDepartments}
                   options={LOCAL_DEPARTMENTS}
                   onChange={handleLocalDepartmentsChange}
@@ -632,11 +766,11 @@ export default function Home() {
             {/* Action buttons */}
             <div className="flex gap-3">
               <button
-                onClick={() => setStep(1)}
+                onClick={() => goToStep(1)}
                 className="flex items-center gap-2 px-5 py-3 border-2 border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-medium transition-colors"
               >
-                <RotateCcw size={16} />
-                Edit
+                <ChevronLeft size={16} />
+                Back
               </button>
               <button
                 onClick={handleSubmit}
@@ -662,6 +796,10 @@ export default function Home() {
         {/* ── STEP 4: Submitted ─────────────────────────────────────── */}
         {activeView === "file" && step === 4 && submittedId && (
           <div className="space-y-5">
+            <StepBackButton
+              label="Back to Review & Edit"
+              onClick={() => goToStep(3)}
+            />
             {/* Success */}
             <div className="bg-white rounded-2xl shadow-sm border border-green-200 p-8 text-center">
               <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
