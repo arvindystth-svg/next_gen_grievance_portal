@@ -1,16 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import dynamic from "next/dynamic";
 import Header from "@/components/Header";
 import VoiceTextRecorder from "@/components/VoiceTextRecorder";
 import DuplicateBanner from "@/components/DuplicateBanner";
 import ComplaintHistory from "@/components/ComplaintHistory";
 import CompletenessCard from "@/components/CompletenessCard";
 import AnalysisLoading from "@/components/AnalysisLoading";
-import WardAreaSelector from "@/components/WardAreaSelector";
 import RoutingPanel from "@/components/RoutingPanel";
-import { assessComplaintCompleteness, SupplementalDetailId, SupplementalDetails, formatSupplementalForSummary, buildScoringSupplemental } from "@/lib/complaintCompleteness";
+import ComplaintSummaryReview from "@/components/ComplaintSummaryReview";
+import { assessComplaintCompleteness, SupplementalDetailId, SupplementalDetails, formatSupplementalForSummary, buildScoringSupplemental, extractAutoFillSupplemental } from "@/lib/complaintCompleteness";
 import { extractAreaFromText } from "@/lib/bengaluruAreas";
 import {
   LOCAL_DEPARTMENTS,
@@ -37,21 +36,10 @@ import {
   ChevronLeft,
   RotateCcw,
   Download,
-  MapPin,
   History,
   PlusCircle,
 } from "lucide-react";
 import { rerouteFromSummary } from "@/lib/summaryRouting";
-
-// Dynamically import Leaflet-based LocationPicker (no SSR)
-const LocationPicker = dynamic(() => import("@/components/LocationPicker"), {
-  ssr: false,
-  loading: () => (
-    <div className="h-64 bg-slate-100 rounded-xl flex items-center justify-center animate-pulse">
-      <span className="text-slate-400 text-sm">Loading map…</span>
-    </div>
-  ),
-});
 
 interface LocationData {
   lat: number;
@@ -86,7 +74,7 @@ interface AnalysisResult {
   model?: string;
 }
 
-type Step = 1 | 2 | 3 | 4;
+type Step = 1 | 2 | 3 | 4 | 5;
 type ActiveView = "file" | "history";
 
 interface AnalysisSnapshot {
@@ -121,7 +109,7 @@ function canNavigateTo(
   isAnalyzing: boolean,
   isSubmitted: boolean
 ): boolean {
-  if (isSubmitted || current === 4) return false;
+  if (isSubmitted || current === 5) return false;
   if (target === current || isAnalyzing || target === 2) return false;
   return target <= maxReached;
 }
@@ -141,12 +129,13 @@ function StepIndicator({
 }) {
   const steps = [
     { num: 1 as Step, label: "Describe" },
-    { num: 2 as Step, label: "AI Analysis" },
+    { num: 2 as Step, label: "Analyze" },
     { num: 3 as Step, label: "Review" },
-    { num: 4 as Step, label: "Submit" },
+    { num: 4 as Step, label: "Summary" },
+    { num: 5 as Step, label: "Submit" },
   ];
   return (
-    <div className="flex items-center justify-center gap-0 mb-6">
+    <div className="flex items-center justify-center gap-0">
       {steps.map((step, i) => {
         const navigable = canNavigateTo(step.num, current, maxReached, isAnalyzing, isSubmitted);
         return (
@@ -189,7 +178,7 @@ function StepIndicator({
             </div>
             {i < steps.length - 1 && (
               <div
-                className={`w-12 sm:w-20 h-0.5 mb-4 mx-1 transition-colors ${
+                className={`w-6 sm:w-10 h-0.5 mb-4 mx-0.5 transition-colors ${
                   step.num < current ? "bg-green-400" : "bg-slate-200"
                 }`}
               />
@@ -231,21 +220,12 @@ export default function Home() {
   const [submittedId, setSubmittedId] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [offlineQueueCount] = useState(0);
-  const [suggestedLocation, setSuggestedLocation] = useState<{
-    lat: number;
-    lng: number;
-    ward?: string;
-    zone?: string;
-    locality?: string;
-  } | null>(null);
   const [complaints, setComplaints] = useState<ComplaintRecord[]>([]);
   const [selectedLocalDepartments, setSelectedLocalDepartments] = useState<string[]>([]);
   const [selectedCpgramsCategories, setSelectedCpgramsCategories] = useState<string[]>([]);
   const [maxStepReached, setMaxStepReached] = useState<Step>(1);
   const [routingUpdated, setRoutingUpdated] = useState(false);
   const lastAutoRoutedSummary = useRef<string | null>(null);
-  const locationSectionRef = useRef<HTMLDivElement>(null);
-  const areaSectionRef = useRef<HTMLDivElement>(null);
   const areaManuallySet = useRef(false);
   const [selectedArea, setSelectedArea] = useState<{
     ward: string;
@@ -253,6 +233,9 @@ export default function Home() {
     locality: string;
   } | null>(null);
   const [supplementalDetails, setSupplementalDetails] = useState<SupplementalDetails>({});
+  const [autoFilledDetails, setAutoFilledDetails] = useState<
+    Partial<Record<SupplementalDetailId, boolean>>
+  >({});
   const [analysisSnapshot, setAnalysisSnapshot] = useState<AnalysisSnapshot | null>(null);
   const [formSessionKey, setFormSessionKey] = useState(0);
   const [isGeocoding, setIsGeocoding] = useState(false);
@@ -322,8 +305,8 @@ export default function Home() {
   }, [editedSummary, step]);
 
   const goToStep = (target: Step) => {
-    if (submittedId && step === 4) return;
-    if (!canNavigateTo(target, step, maxStepReached, isAnalyzing, Boolean(submittedId && step === 4))) return;
+    if (submittedId && step === 5) return;
+    if (!canNavigateTo(target, step, maxStepReached, isAnalyzing, Boolean(submittedId && step === 5))) return;
     setIsAnalyzing(false);
     setStep(target);
   };
@@ -359,6 +342,7 @@ export default function Home() {
 
   const handleDetailChange = (id: SupplementalDetailId, value: string) => {
     setSupplementalDetails((prev) => ({ ...prev, [id]: value }));
+    setAutoFilledDetails((prev) => ({ ...prev, [id]: false }));
   };
 
   const handleDetailBlur = async (id: SupplementalDetailId, value: string) => {
@@ -388,6 +372,7 @@ export default function Home() {
     }
     if (canSkipReanalysis()) {
       setAnalysisError(null);
+      applyAutoFillFromComplaint(grievanceText, editedSummary);
       setStep(3);
       return;
     }
@@ -414,11 +399,15 @@ export default function Home() {
       const data = await res.json();
 
       if (data.resolved && !areaManuallySet.current) {
-        applySelectedArea({
-          ward: data.ward,
-          zone: data.zone,
-          locality: data.locality,
-        });
+        applySelectedArea(
+          {
+            ward: data.ward,
+            zone: data.zone,
+            locality: data.locality,
+          },
+          false,
+          true
+        );
         setLocation({
           lat: data.lat,
           lng: data.lng,
@@ -441,7 +430,11 @@ export default function Home() {
     }
   };
 
-  const applySelectedArea = (area: { ward: string; zone: string; locality: string }, manual = false) => {
+  const applySelectedArea = (
+    area: { ward: string; zone: string; locality: string },
+    manual = false,
+    autoFilled = false
+  ) => {
     if (manual) areaManuallySet.current = true;
     setSelectedArea(area);
     setGeocodeFailed(false);
@@ -449,6 +442,11 @@ export default function Home() {
       ...prev,
       ward: `${area.locality} · ${area.ward}`,
     }));
+    if (autoFilled) {
+      setAutoFilledDetails((prev) => ({ ...prev, ward: true }));
+    } else if (manual) {
+      setAutoFilledDetails((prev) => ({ ...prev, ward: false }));
+    }
     setAnalysisResult((prev) =>
       prev
         ? {
@@ -464,6 +462,44 @@ export default function Home() {
     );
   };
 
+  const applyAutoFillFromComplaint = (text: string, summary: string) => {
+    const { details, autoFilled } = extractAutoFillSupplemental(text, summary);
+    setSupplementalDetails((prev) => {
+      const next = { ...prev };
+      const newlyAutoFilled: Partial<Record<SupplementalDetailId, boolean>> = {};
+      (Object.keys(details) as SupplementalDetailId[]).forEach((id) => {
+        if (!prev[id]?.trim() && details[id]?.trim()) {
+          next[id] = details[id];
+          if (autoFilled[id]) newlyAutoFilled[id] = true;
+        }
+      });
+      if (Object.keys(newlyAutoFilled).length > 0) {
+        setAutoFilledDetails((af) => ({ ...af, ...newlyAutoFilled }));
+      }
+      return next;
+    });
+  };
+
+  const applyDepartmentSelection = (depts: string[]) => {
+    const cpgrams = cpgramsForLocalDepartments(
+      depts.length > 0 ? depts : ["BBMP General Services"]
+    );
+    setSelectedLocalDepartments(depts);
+    setSelectedCpgramsCategories(cpgrams);
+    setAnalysisResult((prev) =>
+      prev
+        ? {
+            ...prev,
+            local_department: depts[0] || prev.local_department,
+            local_departments: depts,
+            cpgrams_category: cpgrams[0] || prev.cpgrams_category,
+            cpgrams_categories: cpgrams,
+          }
+        : null
+    );
+    lastAutoRoutedSummary.current = editedSummary;
+  };
+
   const handleFixCompletenessField = (fieldId: string) => {
     if (fieldId === "description") {
       goToStep(1);
@@ -474,51 +510,8 @@ export default function Home() {
       return;
     }
     if (fieldId === "ward" || fieldId === "landmark") {
-      areaSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById("completeness-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-  };
-
-  const handleReviewLocationChange = (loc: LocationData) => {
-    setLocation(loc);
-    const wardInfo = loc.ward
-      ? { ward: loc.ward, zone: loc.zone || "To be confirmed", locality: loc.locality || loc.ward }
-      : null;
-    if (wardInfo) applySelectedArea(wardInfo);
-    setAnalysisResult((prev) =>
-      prev
-        ? {
-            ...prev,
-            location: {
-              ...prev.location,
-              latitude: loc.lat,
-              longitude: loc.lng,
-              ward: loc.ward || prev.location.ward,
-              zone: loc.zone || prev.location.zone,
-              locality: loc.locality || prev.location.locality,
-            },
-          }
-        : null
-    );
-  };
-
-  const applyDepartmentSelection = (localDepts: string[]) => {
-    const cpgrams = cpgramsForLocalDepartments(
-      localDepts.length > 0 ? localDepts : ["BBMP General Services"]
-    );
-    setSelectedLocalDepartments(localDepts);
-    setSelectedCpgramsCategories(cpgrams);
-    setAnalysisResult((prev) =>
-      prev
-        ? {
-            ...prev,
-            local_department: localDepts[0] || prev.local_department,
-            local_departments: localDepts,
-            cpgrams_category: cpgrams[0] || prev.cpgrams_category,
-            cpgrams_categories: cpgrams,
-          }
-        : null
-    );
-    lastAutoRoutedSummary.current = editedSummary;
   };
 
   const handleAnalyze = async () => {
@@ -528,6 +521,7 @@ export default function Home() {
     }
     if (canSkipReanalysis()) {
       setAnalysisError(null);
+      applyAutoFillFromComplaint(grievanceText, editedSummary);
       setStep(3);
       return;
     }
@@ -580,12 +574,12 @@ export default function Home() {
           zone: data.location.zone,
           locality: data.location.locality,
         };
-        setSuggestedLocation(sugLoc);
         setLocation({ ...sugLoc, source: "nlp" });
       }
 
       setStep(3);
       setMaxStepReached((m) => (m < 3 ? 3 : m));
+      applyAutoFillFromComplaint(grievanceText, data.summary);
       setAnalysisSnapshot({ grievanceText: grievanceText.trim(), language });
     } catch (err) {
       setAnalysisError(err instanceof Error ? err.message : "Unknown error occurred");
@@ -621,8 +615,8 @@ export default function Home() {
     }
 
     setSubmittedId(id);
-    setStep(4);
-    setMaxStepReached(4);
+    setStep(5);
+    setMaxStepReached(5);
     setIsSubmitting(false);
   };
 
@@ -638,11 +632,11 @@ export default function Home() {
     setDuplicate(null);
     setDuplicateDismissed(false);
     setSubmittedId(null);
-    setSuggestedLocation(null);
     setSelectedLocalDepartments([]);
     setSelectedCpgramsCategories([]);
     setSelectedArea(null);
     setSupplementalDetails({});
+    setAutoFilledDetails({});
     areaManuallySet.current = false;
     setAnalysisSnapshot(null);
     setMaxStepReached(1);
@@ -657,21 +651,44 @@ export default function Home() {
     applyDepartmentSelection(depts);
   };
 
+  const handleContinueToSummary = () => {
+    setStep(4);
+    setMaxStepReached((m) => (m < 4 ? 4 : m));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   return (
     <div className="min-h-screen bg-slate-100">
-      <Header
-        selectedLanguage={language}
-        onLanguageChange={setLanguage}
-        isOnline={isOnline}
-        offlineQueueCount={offlineQueueCount}
-        onMyComplaintsClick={() => {
-          if (step === 4 && submittedId) handleReset();
-          setActiveView("history");
-        }}
-        complaintCount={complaints.length}
-      />
+      <div className="sticky top-0 z-50">
+        <Header
+          embedded
+          selectedLanguage={language}
+          onLanguageChange={setLanguage}
+          isOnline={isOnline}
+          offlineQueueCount={offlineQueueCount}
+          onMyComplaintsClick={() => {
+            if (step === 5 && submittedId) handleReset();
+            setActiveView("history");
+          }}
+          complaintCount={complaints.length}
+        />
 
-      <main className="max-w-2xl mx-auto px-4 py-6 pb-12">
+        {activeView === "file" && step !== 5 && (
+          <div className="bg-slate-100/98 backdrop-blur-md border-b border-slate-200/80 shadow-sm">
+            <div className="max-w-2xl mx-auto px-4 py-2">
+              <StepIndicator
+                current={step}
+                maxReached={maxStepReached}
+                isAnalyzing={isAnalyzing}
+                isSubmitted={false}
+                onStepClick={goToStep}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <main className="max-w-2xl mx-auto px-4 pb-12 pt-6">
         {/* Hero */}
         <div className="text-center mb-6">
           <h2 className="text-2xl font-bold text-[#1a3c6e]">
@@ -684,24 +701,12 @@ export default function Home() {
           </p>
         </div>
 
-        {activeView === "file" && step !== 4 && (
-          <div className="sticky top-16 z-40 -mx-4 px-4 py-3 mb-4 bg-slate-100/95 backdrop-blur-md border-b border-slate-200/70 shadow-sm">
-            <StepIndicator
-              current={step}
-              maxReached={maxStepReached}
-              isAnalyzing={isAnalyzing}
-              isSubmitted={false}
-              onStepClick={goToStep}
-            />
-          </div>
-        )}
-
         {/* View tabs */}
         <div className="flex gap-2 mb-5 p-1 bg-slate-200/60 rounded-xl">
           <button
             type="button"
             onClick={() => {
-              if (step === 4) handleReset();
+              if (step === 5) handleReset();
               setActiveView("file");
             }}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
@@ -858,52 +863,19 @@ export default function Home() {
             </div>
 
             {completenessReport && (
-              <CompletenessCard
-                report={completenessReport}
-                supplementalDetails={supplementalDetails}
-                onDetailChange={handleDetailChange}
-                onDetailBlur={handleDetailBlur}
-                onFixField={handleFixCompletenessField}
-              />
-            )}
-
-            {/* Area & optional pinpoint */}
-            <div
-              ref={areaSectionRef}
-              className="bg-white rounded-2xl shadow-sm border border-slate-100"
-            >
-              <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 rounded-t-2xl">
-                <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
-                  <MapPin size={15} className="text-blue-500" />
-                  Affected Area
-                </h3>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  {geocodeFailed
-                    ? "Could not auto-detect ward — please search and select below."
-                    : "Ward auto-filled via geocoding when an area is mentioned in your complaint."}
-                </p>
-              </div>
-              <div className="p-4 space-y-4">
-                <WardAreaSelector
-                  value={selectedArea}
-                  onChange={(area) => applySelectedArea(area, true)}
+              <div id="completeness-section">
+                <CompletenessCard
+                  report={completenessReport}
+                  supplementalDetails={supplementalDetails}
+                  autoFilledDetails={autoFilledDetails}
+                  selectedArea={selectedArea}
+                  onDetailChange={handleDetailChange}
+                  onDetailBlur={handleDetailBlur}
+                  onWardAreaChange={(area) => applySelectedArea(area, true)}
+                  onFixField={handleFixCompletenessField}
                 />
-
-                <details className="group">
-                  <summary className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer list-none flex items-center gap-1">
-                    <ChevronRight size={12} className="transition-transform group-open:rotate-90" />
-                    Pin on map (optional)
-                  </summary>
-                  <div ref={locationSectionRef} className="mt-3">
-                    <LocationPicker
-                      location={location}
-                      onLocationChange={handleReviewLocationChange}
-                      suggestedLocation={suggestedLocation}
-                    />
-                  </div>
-                </details>
               </div>
-            </div>
+            )}
 
             {/* Duplicate banner */}
             {duplicate && !duplicateDismissed && (
@@ -924,8 +896,57 @@ export default function Home() {
                 Back
               </button>
               <button
+                onClick={handleContinueToSummary}
+                disabled={selectedLocalDepartments.length === 0}
+                className="flex-1 bg-[#1a3c6e] hover:bg-[#2563eb] disabled:bg-slate-300 text-white font-bold py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+              >
+                Continue to Summary
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── STEP 4: Summary ───────────────────────────────────────── */}
+        {activeView === "file" && step === 4 && analysisResult && (
+          <div className="space-y-4">
+            <StepBackButton label="Back to Review" onClick={() => goToStep(3)} />
+
+            <ComplaintSummaryReview
+              grievanceText={grievanceText}
+              editedSummary={editedSummary}
+              supplementalSummary={formatSupplementalForSummary(scoringSupplemental)}
+              localDepartments={
+                selectedLocalDepartments.length
+                  ? selectedLocalDepartments
+                  : analysisResult.local_departments?.length
+                  ? analysisResult.local_departments
+                  : [analysisResult.local_department]
+              }
+              cpgramsCategories={
+                selectedCpgramsCategories.length
+                  ? selectedCpgramsCategories
+                  : analysisResult.cpgrams_categories?.length
+                  ? analysisResult.cpgrams_categories
+                  : [analysisResult.cpgrams_category]
+              }
+              selectedArea={selectedArea}
+              areaAutoFilled={Boolean(autoFilledDetails.ward)}
+              onAreaChange={(area) => applySelectedArea(area, true)}
+              onEditReview={() => goToStep(3)}
+            />
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => goToStep(3)}
+                className="flex items-center gap-2 px-5 py-3 border-2 border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-medium transition-colors"
+              >
+                <ChevronLeft size={16} />
+                Back
+              </button>
+              <button
                 onClick={handleSubmit}
-                disabled={isSubmitting || selectedLocalDepartments.length === 0}
+                disabled={isSubmitting || selectedLocalDepartments.length === 0 || !selectedArea}
                 className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white font-bold py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
@@ -944,8 +965,8 @@ export default function Home() {
           </div>
         )}
 
-        {/* ── STEP 4: Submitted ─────────────────────────────────────── */}
-        {activeView === "file" && step === 4 && submittedId && (
+        {/* ── STEP 5: Submitted ─────────────────────────────────────── */}
+        {activeView === "file" && step === 5 && submittedId && (
           <div className="space-y-5">
             {/* Success */}
             <div className="bg-white rounded-2xl shadow-sm border border-green-200 p-8 text-center">

@@ -19,6 +19,8 @@ interface HeaderProps {
   offlineQueueCount: number;
   onMyComplaintsClick?: () => void;
   complaintCount?: number;
+  /** When true, header is inside a sticky shell and should not apply its own positioning. */
+  embedded?: boolean;
 }
 
 export default function Header({
@@ -28,6 +30,7 @@ export default function Header({
   offlineQueueCount,
   onMyComplaintsClick,
   complaintCount = 0,
+  embedded = false,
 }: HeaderProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
@@ -37,7 +40,7 @@ export default function Header({
   return (
     <>
       {/* Main Header */}
-      <header className="bg-[#1a3c6e] text-white shadow-lg sticky top-0 z-50">
+      <header className={`bg-[#1a3c6e] text-white shadow-lg ${embedded ? "" : "sticky top-0 z-50"}`}>
         {/* Government stripe */}
         <div className="bg-[#f97316] h-1 w-full" />
 

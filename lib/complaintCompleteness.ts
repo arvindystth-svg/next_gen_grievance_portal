@@ -346,6 +346,64 @@ export function assessComplaintCompleteness(params: AssessParams): CompletenessR
   return { score, fields, missing, completed };
 }
 
+/** Pull missing-detail values already present in the citizen's complaint text. */
+export function extractAutoFillSupplemental(
+  grievanceText: string,
+  editedSummary: string
+): { details: SupplementalDetails; autoFilled: Partial<Record<SupplementalDetailId, boolean>> } {
+  const text = `${grievanceText}\n${editedSummary}`;
+  const details: SupplementalDetails = {};
+  const autoFilled: Partial<Record<SupplementalDetailId, boolean>> = {};
+
+  for (const pattern of TIMELINE_PATTERNS) {
+    const match = text.match(pattern);
+    if (match) {
+      const snippet = match[0].trim();
+      if (snippet.length >= 3 && supplementalIsValid("timeline", { timeline: snippet })) {
+        details.timeline = snippet;
+        autoFilled.timeline = true;
+        break;
+      }
+    }
+  }
+
+  for (const pattern of LANDMARK_PATTERNS) {
+    const match = text.match(pattern);
+    if (match) {
+      const idx = match.index ?? 0;
+      const start = Math.max(0, idx - 30);
+      const end = Math.min(text.length, idx + match[0].length + 40);
+      const snippet = text.slice(start, end).trim().replace(/^[,.\s]+|[,.\s]+$/g, "");
+      if (snippet.length >= 4 && supplementalIsValid("landmark", { landmark: snippet })) {
+        details.landmark = snippet;
+        autoFilled.landmark = true;
+        break;
+      }
+    }
+  }
+
+  for (const pattern of CONSUMER_ID_PATTERNS) {
+    const match = text.match(pattern);
+    if (match) {
+      const snippet = match[0].trim();
+      if (supplementalIsValid("consumer_id", { consumer_id: snippet })) {
+        details.consumer_id = snippet;
+        autoFilled.consumer_id = true;
+        break;
+      }
+    }
+  }
+
+  const consumerNumMatch = text.match(/\b(?:rr|consumer|account|connection)\s*(?:no\.?|number|id)?\s*[#:]?\s*(\d{4,})/i);
+  if (!details.consumer_id && consumerNumMatch) {
+    const snippet = consumerNumMatch[0].trim();
+    details.consumer_id = snippet;
+    autoFilled.consumer_id = true;
+  }
+
+  return { details, autoFilled };
+}
+
 export function formatSupplementalForSummary(details: SupplementalDetails): string {
   const lines: string[] = [];
   if (details.landmark?.trim()) lines.push(`Landmark/area: ${details.landmark.trim()}`);
