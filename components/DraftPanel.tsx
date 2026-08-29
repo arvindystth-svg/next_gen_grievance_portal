@@ -1,0 +1,111 @@
+"use client";
+
+import { Clock, FileText, Play, Trash2, MapPin, Building2 } from "lucide-react";
+import { useLanguage } from "@/lib/LanguageContext";
+import { ComplaintDraft, DraftStep, formatDraftSavedAt } from "@/lib/complaintDraft";
+import { TranslationKey } from "@/lib/i18n";
+
+interface DraftPanelProps {
+  draft: ComplaintDraft | null;
+  onResume: () => void;
+  onDiscard: () => void;
+}
+
+function stepTranslationKey(step: DraftStep): TranslationKey {
+  const map: Record<DraftStep, TranslationKey> = {
+    1: "step.describe",
+    2: "step.analyze",
+    3: "step.review",
+    4: "step.summary",
+    5: "step.submit",
+  };
+  return map[step];
+}
+
+export default function DraftPanel({ draft, onResume, onDiscard }: DraftPanelProps) {
+  const { t } = useLanguage();
+
+  if (!draft) {
+    return (
+      <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
+        <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <FileText size={24} className="text-slate-400" />
+        </div>
+        <p className="text-slate-500 text-sm leading-relaxed">{t("draft.empty")}</p>
+      </div>
+    );
+  }
+
+  const preview =
+    draft.grievanceText.trim() ||
+    draft.editedSummary.trim() ||
+    t("draft.noPreview");
+  const displayStep: DraftStep = draft.step === 2 && draft.analysisResult ? 3 : draft.step;
+
+  return (
+    <div className="bg-white border border-amber-200 rounded-2xl overflow-hidden shadow-sm">
+      <div className="bg-amber-50 border-b border-amber-100 px-5 py-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <FileText size={18} className="text-amber-700" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-semibold text-amber-900 text-sm">{t("draft.savedTitle")}</h3>
+            <p className="text-xs text-amber-800 mt-0.5 flex items-center gap-1">
+              <Clock size={11} />
+              {t("draft.savedAt", { date: formatDraftSavedAt(draft.savedAt) })}
+            </p>
+            <p className="text-xs text-amber-700 mt-1">
+              {t("draft.step", { step: t(stepTranslationKey(displayStep)) })}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-5 space-y-4">
+        <div>
+          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+            {t("draft.preview")}
+          </p>
+          <p className="text-sm text-slate-700 leading-relaxed line-clamp-4">{preview}</p>
+        </div>
+
+        {(draft.selectedArea || draft.selectedLocalDepartments.length > 0) && (
+          <div className="flex flex-wrap gap-3 text-xs text-slate-600">
+            {draft.selectedArea && (
+              <span className="flex items-center gap-1">
+                <MapPin size={12} className="text-blue-500" />
+                {draft.selectedArea.locality} · {draft.selectedArea.ward}
+              </span>
+            )}
+            {draft.selectedLocalDepartments.length > 0 && (
+              <span className="flex items-center gap-1">
+                <Building2 size={12} className="text-blue-500" />
+                {draft.selectedLocalDepartments.join(" · ")}
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-1">
+          <button
+            type="button"
+            onClick={onResume}
+            className="flex-1 bg-[#1a3c6e] hover:bg-[#2563eb] text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+          >
+            <Play size={16} />
+            {t("draft.resume")}
+          </button>
+          <button
+            type="button"
+            onClick={onDiscard}
+            className="px-4 py-3 border-2 border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
+          >
+            <Trash2 size={16} />
+            {t("draft.discard")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

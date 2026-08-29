@@ -30,7 +30,11 @@ const en = {
   "hero.historySubtitle": "Track status, resolutions, and rate closed complaints",
 
   "tab.file": "File Complaint",
+  "tab.draft": "Draft",
   "tab.history": "My Complaints",
+
+  "hero.draftTitle": "Saved Draft",
+  "hero.draftSubtitle": "Resume your in-progress complaint",
 
   "step.describe": "Describe",
   "step.analyze": "Analyze",
@@ -54,6 +58,14 @@ const en = {
   "draft.restoredBody": "Your in-progress complaint was saved automatically on {date}. Continue where you left off.",
   "draft.restoredBodyNoDate": "Your in-progress complaint was saved automatically. Continue where you left off.",
   "draft.autofillHint": "Values auto-filled from your complaint can be changed.",
+  "draft.empty": "No saved draft. Start filing a complaint — your progress is saved automatically and appears here.",
+  "draft.savedTitle": "In-progress complaint",
+  "draft.savedAt": "Last saved {date}",
+  "draft.step": "Stopped at: {step}",
+  "draft.preview": "Complaint preview",
+  "draft.noPreview": "No description entered yet",
+  "draft.resume": "Resume draft",
+  "draft.discard": "Discard",
 
   "ai.summary": "AI Summary",
   "ai.confident": "{n}% confident",
@@ -154,6 +166,7 @@ const kn: Dict = {
   "hero.historyTitle": "ನನ್ನ ದೂರು ಇತಿಹಾಸ",
   "hero.historySubtitle": "ಸ್ಥಿತಿ, ಪರಿಹಾರ ಮತ್ತು ಮುಚ್ಚಿದ ದೂರುಗಳನ್ನು ಟ್ರ್ಯಾಕ್ ಮಾಡಿ",
   "tab.file": "ದೂರು ದಾಖಲಿಸಿ",
+  "tab.draft": "ಕರಡು",
   "tab.history": "ನನ್ನ ದೂರುಗಳು",
   "step.describe": "ವಿವರಿಸಿ",
   "step.analyze": "ವಿಶ್ಲೇಷಣೆ",

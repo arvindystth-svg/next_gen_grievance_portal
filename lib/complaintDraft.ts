@@ -42,7 +42,7 @@ export interface DraftAnalysisResult {
 export interface ComplaintDraft {
   version: typeof DRAFT_VERSION;
   savedAt: string;
-  activeView: "file" | "history";
+  activeView: "file" | "draft" | "history";
   step: DraftStep;
   language: string;
   grievanceText: string;

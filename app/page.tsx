@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import VoiceTextRecorder from "@/components/VoiceTextRecorder";
 import DuplicateBanner from "@/components/DuplicateBanner";
 import ComplaintHistory from "@/components/ComplaintHistory";
+import DraftPanel from "@/components/DraftPanel";
 import CompletenessCard from "@/components/CompletenessCard";
 import AnalysisLoading from "@/components/AnalysisLoading";
 import RoutingPanel from "@/components/RoutingPanel";
@@ -25,7 +26,6 @@ import {
   loadComplaintDraft,
   saveComplaintDraft,
   clearComplaintDraft,
-  formatDraftSavedAt,
   ComplaintDraft,
 } from "@/lib/complaintDraft";
 import { LanguageProvider, useLanguage } from "@/lib/LanguageContext";
@@ -48,7 +48,6 @@ import {
   History,
   PlusCircle,
   FileText,
-  X,
 } from "lucide-react";
 import { rerouteFromSummary } from "@/lib/summaryRouting";
 
@@ -86,7 +85,7 @@ interface AnalysisResult {
 }
 
 type Step = 1 | 2 | 3 | 4 | 5;
-type ActiveView = "file" | "history";
+type ActiveView = "file" | "draft" | "history";
 
 interface AnalysisSnapshot {
   grievanceText: string;
@@ -261,39 +260,94 @@ function HomeContent() {
   const [formSessionKey, setFormSessionKey] = useState(0);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodeFailed, setGeocodeFailed] = useState(false);
-  const [draftRestored, setDraftRestored] = useState(false);
-  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  const [savedDraft, setSavedDraft] = useState<ComplaintDraft | null>(null);
   const draftReadyRef = useRef(false);
   const draftStateRef = useRef<ComplaintDraft | null>(null);
+  const sessionActiveRef = useRef(false);
+
+  const refreshSavedDraft = () => {
+    setSavedDraft(loadComplaintDraft());
+  };
+
+  const applyDraft = (draft: ComplaintDraft) => {
+    if (isLanguageCode(draft.language)) setLanguage(draft.language);
+    setGrievanceText(draft.grievanceText);
+    setLocation(draft.location);
+    setSelectedCategory(draft.selectedCategory);
+    setAnalysisResult(draft.analysisResult);
+    setEditedSummary(draft.editedSummary);
+    setDuplicateDismissed(draft.duplicateDismissed);
+    setSelectedLocalDepartments(draft.selectedLocalDepartments);
+    setSelectedCpgramsCategories(draft.selectedCpgramsCategories);
+    setMaxStepReached(draft.maxStepReached);
+    setSelectedArea(draft.selectedArea);
+    setSupplementalDetails(draft.supplementalDetails);
+    setAutoFilledDetails(draft.autoFilledDetails);
+    setAnalysisSnapshot(draft.analysisSnapshot);
+    setGeocodeFailed(draft.geocodeFailed);
+    areaManuallySet.current = draft.areaManuallySet;
+    lastAutoRoutedSummary.current = draft.lastAutoRoutedSummary;
+    setStep(draft.step === 2 ? (draft.analysisResult ? 3 : 1) : draft.step);
+    setIsAnalyzing(false);
+    setAnalysisError(null);
+    setSubmittedId(null);
+  };
+
+  const resetFormState = () => {
+    sessionActiveRef.current = false;
+    setStep(1);
+    setGrievanceText("");
+    setLocation(null);
+    setSelectedCategory(undefined);
+    setAnalysisResult(null);
+    setEditedSummary("");
+    setAnalysisError(null);
+    setDuplicate(null);
+    setDuplicateDismissed(false);
+    setSubmittedId(null);
+    setSelectedLocalDepartments([]);
+    setSelectedCpgramsCategories([]);
+    setSelectedArea(null);
+    setSupplementalDetails({});
+    setAutoFilledDetails({});
+    areaManuallySet.current = false;
+    setAnalysisSnapshot(null);
+    setMaxStepReached(1);
+    lastAutoRoutedSummary.current = null;
+    setFormSessionKey((k) => k + 1);
+    setGeocodeFailed(false);
+    setIsGeocoding(false);
+    setIsAnalyzing(false);
+  };
+
+  const markSessionActive = () => {
+    sessionActiveRef.current = true;
+  };
+
+  const handleGrievanceTextChange = (text: string) => {
+    markSessionActive();
+    setGrievanceText(text);
+  };
+
+  const handleResumeDraft = () => {
+    if (!savedDraft) return;
+    applyDraft(savedDraft);
+    markSessionActive();
+    setActiveView("file");
+    scrollContentToTop();
+  };
+
+  const handleDiscardDraft = () => {
+    clearComplaintDraft();
+    setSavedDraft(null);
+    resetFormState();
+  };
 
   useEffect(() => {
     setComplaints(getComplaintHistory());
-    const draft = loadComplaintDraft();
-    if (draft) {
-      setActiveView(draft.activeView);
-      if (isLanguageCode(draft.language)) setLanguage(draft.language);
-      setGrievanceText(draft.grievanceText);
-      setLocation(draft.location);
-      setSelectedCategory(draft.selectedCategory);
-      setAnalysisResult(draft.analysisResult);
-      setEditedSummary(draft.editedSummary);
-      setDuplicateDismissed(draft.duplicateDismissed);
-      setSelectedLocalDepartments(draft.selectedLocalDepartments);
-      setSelectedCpgramsCategories(draft.selectedCpgramsCategories);
-      setMaxStepReached(draft.maxStepReached);
-      setSelectedArea(draft.selectedArea);
-      setSupplementalDetails(draft.supplementalDetails);
-      setAutoFilledDetails(draft.autoFilledDetails);
-      setAnalysisSnapshot(draft.analysisSnapshot);
-      setGeocodeFailed(draft.geocodeFailed);
-      areaManuallySet.current = draft.areaManuallySet;
-      lastAutoRoutedSummary.current = draft.lastAutoRoutedSummary;
-      setStep(draft.step === 2 ? (draft.analysisResult ? 3 : 1) : draft.step);
-      setDraftSavedAt(draft.savedAt);
-      setDraftRestored(true);
-    }
+    refreshSavedDraft();
     draftReadyRef.current = true;
-  }, [setLanguage]);
+  }, []);
 
   useEffect(() => {
     const update = () => setIsOnline(navigator.onLine);
@@ -385,16 +439,17 @@ function HomeContent() {
   draftStateRef.current = buildDraftSnapshot();
 
   useEffect(() => {
-    if (!draftReadyRef.current) return;
+    if (!draftReadyRef.current || !sessionActiveRef.current) return;
     if (step === 5 && submittedId) {
       clearComplaintDraft();
+      setSavedDraft(null);
       return;
     }
 
     const timer = window.setTimeout(() => {
       const draft = buildDraftSnapshot();
       saveComplaintDraft(draft);
-      setDraftSavedAt(draft.savedAt);
+      setSavedDraft(draft);
     }, 400);
 
     return () => window.clearTimeout(timer);
@@ -422,7 +477,7 @@ function HomeContent() {
 
   useEffect(() => {
     const flushDraft = () => {
-      if (!draftReadyRef.current || !draftStateRef.current) return;
+      if (!draftReadyRef.current || !sessionActiveRef.current || !draftStateRef.current) return;
       if (draftStateRef.current.step === 5) {
         clearComplaintDraft();
         return;
@@ -479,6 +534,7 @@ function HomeContent() {
   ]);
 
   const handleDetailChange = (id: SupplementalDetailId, value: string) => {
+    markSessionActive();
     setSupplementalDetails((prev) => ({ ...prev, [id]: value }));
     setAutoFilledDetails((prev) => ({ ...prev, [id]: false }));
   };
@@ -504,6 +560,7 @@ function HomeContent() {
     );
 
   const handleContinueFromDescribe = () => {
+    markSessionActive();
     if (!grievanceText.trim() || grievanceText.trim().length < 10) {
       setAnalysisError(t("describe.minChars"));
       return;
@@ -666,6 +723,7 @@ function HomeContent() {
   };
 
   const handleAnalyze = async () => {
+    markSessionActive();
     if (!grievanceText.trim() || grievanceText.trim().length < 10) {
       setAnalysisError(t("describe.minChars"));
       return;
@@ -769,46 +827,25 @@ function HomeContent() {
     setStep(5);
     setMaxStepReached(5);
     clearComplaintDraft();
-    setDraftRestored(false);
-    setDraftSavedAt(null);
+    setSavedDraft(null);
     setIsSubmitting(false);
   };
 
   const handleReset = () => {
     clearComplaintDraft();
-    setDraftRestored(false);
-    setDraftSavedAt(null);
+    setSavedDraft(null);
+    resetFormState();
     setActiveView("file");
-    setStep(1);
-    setGrievanceText("");
-    setLocation(null);
-    setSelectedCategory(undefined);
-    setAnalysisResult(null);
-    setEditedSummary("");
-    setAnalysisError(null);
-    setDuplicate(null);
-    setDuplicateDismissed(false);
-    setSubmittedId(null);
-    setSelectedLocalDepartments([]);
-    setSelectedCpgramsCategories([]);
-    setSelectedArea(null);
-    setSupplementalDetails({});
-    setAutoFilledDetails({});
-    areaManuallySet.current = false;
-    setAnalysisSnapshot(null);
-    setMaxStepReached(1);
-    lastAutoRoutedSummary.current = null;
-    setFormSessionKey((k) => k + 1);
-    setGeocodeFailed(false);
-    setIsGeocoding(false);
     scrollContentToTop();
   };
 
   const handleLocalDepartmentsChange = (depts: string[]) => {
+    markSessionActive();
     applyDepartmentSelection(depts);
   };
 
   const handleContinueToSummary = () => {
+    markSessionActive();
     setStep(4);
     setMaxStepReached((m) => (m < 4 ? 4 : m));
     scrollContentToTop();
@@ -831,42 +868,68 @@ function HomeContent() {
         <div className="max-w-2xl mx-auto px-4 pt-2 pb-2">
           <div className="text-center mb-2">
             <h2 className="text-lg font-bold text-[#1a3c6e] leading-tight">
-              {activeView === "history" ? t("hero.historyTitle") : t("hero.fileTitle")}
+              {activeView === "history"
+                ? t("hero.historyTitle")
+                : activeView === "draft"
+                ? t("hero.draftTitle")
+                : t("hero.fileTitle")}
             </h2>
             {activeView === "history" && (
               <p className="text-slate-500 text-xs mt-0.5">
                 {t("hero.historySubtitle")}
               </p>
             )}
+            {activeView === "draft" && (
+              <p className="text-slate-500 text-xs mt-0.5">
+                {t("hero.draftSubtitle")}
+              </p>
+            )}
           </div>
 
-          <div className="flex gap-1.5 mb-2 p-0.5 bg-slate-200/60 rounded-lg">
+          <div className="flex gap-1 mb-2 p-0.5 bg-slate-200/60 rounded-lg">
             <button
               type="button"
               onClick={() => {
                 if (step === 5) handleReset();
                 setActiveView("file");
               }}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[11px] font-semibold transition-all ${
                 activeView === "file"
                   ? "bg-white text-[#1a3c6e] shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              <PlusCircle size={14} />
-              {t("tab.file")}
+              <PlusCircle size={13} />
+              <span className="truncate">{t("tab.file")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView("draft")}
+              className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[11px] font-semibold transition-all ${
+                activeView === "draft"
+                  ? "bg-white text-[#1a3c6e] shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <FileText size={13} />
+              <span className="truncate">{t("tab.draft")}</span>
+              {savedDraft && (
+                <span className="bg-amber-500 text-white text-[9px] font-bold px-1 py-0 rounded-full min-w-[14px] text-center">
+                  1
+                </span>
+              )}
             </button>
             <button
               type="button"
               onClick={() => setActiveView("history")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[11px] font-semibold transition-all ${
                 activeView === "history"
                   ? "bg-white text-[#1a3c6e] shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              <History size={14} />
-              {t("tab.history")}
+              <History size={13} />
+              <span className="truncate">{t("tab.history")}</span>
               {complaints.length > 0 && (
                 <span className="bg-[#1a3c6e] text-white text-[9px] font-bold px-1 py-0 rounded-full min-w-[14px] text-center">
                   {complaints.length}
@@ -892,6 +955,15 @@ function HomeContent() {
       <main ref={contentScrollRef} className="flex-1 overflow-y-auto overscroll-contain">
         <div className="max-w-2xl mx-auto px-4 pb-12 pt-3">
 
+        {/* ── DRAFT VIEW ───────────────────────────────────────────── */}
+        {activeView === "draft" && (
+          <DraftPanel
+            draft={savedDraft}
+            onResume={handleResumeDraft}
+            onDiscard={handleDiscardDraft}
+          />
+        )}
+
         {/* ── HISTORY VIEW ─────────────────────────────────────────── */}
         {activeView === "history" && (
           <ComplaintHistory
@@ -903,27 +975,6 @@ function HomeContent() {
         {/* ── FILE COMPLAINT VIEW ──────────────────────────────────── */}
         {activeView === "file" && (
         <>
-        {draftRestored && step !== 5 && (
-          <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
-            <FileText size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-amber-900">{t("draft.restored")}</p>
-              <p className="text-xs text-amber-800 mt-0.5">
-                {draftSavedAt
-                  ? t("draft.restoredBody", { date: formatDraftSavedAt(draftSavedAt) })
-                  : t("draft.restoredBodyNoDate")}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setDraftRestored(false)}
-              className="text-amber-600 hover:text-amber-800 p-1"
-              aria-label="Dismiss draft notice"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        )}
         {(step === 1 && !isAnalyzing) && (
           <div className="space-y-4">
             {maxStepReached >= 3 && (
@@ -953,7 +1004,7 @@ function HomeContent() {
                 <VoiceTextRecorder
                   key={formSessionKey}
                   text={grievanceText}
-                  onTextChange={setGrievanceText}
+                  onTextChange={handleGrievanceTextChange}
                   language={language}
                 />
                 {analysisError && (
@@ -1008,7 +1059,10 @@ function HomeContent() {
 
               <textarea
                 value={editedSummary}
-                onChange={(e) => setEditedSummary(e.target.value)}
+                onChange={(e) => {
+                  markSessionActive();
+                  setEditedSummary(e.target.value);
+                }}
                 rows={3}
                 className="w-full px-3 py-2.5 text-sm border border-blue-200 bg-blue-50/50 rounded-lg focus:border-blue-500 focus:outline-none resize-none text-slate-800 focus:bg-white transition-colors"
               />
@@ -1035,7 +1089,10 @@ function HomeContent() {
                   localOptions={LOCAL_DEPARTMENTS}
                   cpgramsOptions={CPGRAMS_MINISTRIES}
                   onLocalChange={handleLocalDepartmentsChange}
-                  onCpgramsChange={setSelectedCpgramsCategories}
+                  onCpgramsChange={(cats) => {
+                    markSessionActive();
+                    setSelectedCpgramsCategories(cats);
+                  }}
                   routingUpdated={routingUpdated}
                 />
               </div>
@@ -1049,7 +1106,10 @@ function HomeContent() {
                   selectedArea={selectedArea}
                   onDetailChange={handleDetailChange}
                   onDetailBlur={handleDetailBlur}
-                  onWardAreaChange={(area) => applySelectedArea(area, true)}
+                  onWardAreaChange={(area) => {
+                    markSessionActive();
+                    applySelectedArea(area, true);
+                  }}
                   onFixField={handleFixCompletenessField}
                 />
             )}
@@ -1109,7 +1169,10 @@ function HomeContent() {
               }
               selectedArea={selectedArea}
               areaAutoFilled={Boolean(autoFilledDetails.ward)}
-              onAreaChange={(area) => applySelectedArea(area, true)}
+              onAreaChange={(area) => {
+                markSessionActive();
+                applySelectedArea(area, true);
+              }}
               onEditReview={() => goToStep(3)}
             />
 
