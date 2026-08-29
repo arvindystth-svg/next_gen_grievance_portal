@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Header from "@/components/Header";
 import VoiceTextRecorder from "@/components/VoiceTextRecorder";
@@ -8,7 +8,6 @@ import AdvisoryCard from "@/components/AdvisoryCard";
 import DuplicateBanner from "@/components/DuplicateBanner";
 import {
   SEED_GRIEVANCES,
-  DEMO_PRESETS,
   SeedGrievance,
   GrievanceCategory,
 } from "@/lib/seedData";
@@ -42,7 +41,7 @@ interface LocationData {
   ward?: string;
   zone?: string;
   locality?: string;
-  source: "gps" | "exif" | "nlp" | "manual" | "preset";
+  source: "gps" | "exif" | "nlp" | "manual";
 }
 
 interface AnalysisResult {
@@ -144,7 +143,6 @@ export default function Home() {
   const [step, setStep] = useState<Step>(1);
   const [language, setLanguage] = useState("en");
   const [grievanceText, setGrievanceText] = useState("");
-  const [audioFile, setAudioFile] = useState<File | null>(null);
   const [location, setLocation] = useState<LocationData | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<GrievanceCategory | undefined>();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -184,21 +182,6 @@ export default function Home() {
       setDuplicateDismissed(false);
     }
   }, [grievanceText, location, selectedCategory]);
-
-  const handlePreset = useCallback((preset: typeof DEMO_PRESETS[0]) => {
-    setGrievanceText(preset.text);
-    setSelectedCategory(preset.category);
-    const loc: LocationData = {
-      lat: preset.lat,
-      lng: preset.lng,
-      source: "preset",
-      ward: SEED_GRIEVANCES.find((g) => g.id === preset.seedId)?.ward,
-      zone: SEED_GRIEVANCES.find((g) => g.id === preset.seedId)?.zone,
-      locality: preset.label.split("(")[1]?.replace(")", ""),
-    };
-    setLocation(loc);
-    setSuggestedLocation(loc);
-  }, []);
 
   const handleAnalyze = async () => {
     if (!grievanceText.trim() || grievanceText.trim().length < 10) {
@@ -264,7 +247,6 @@ export default function Home() {
   const handleReset = () => {
     setStep(1);
     setGrievanceText("");
-    setAudioFile(null);
     setLocation(null);
     setSelectedCategory(undefined);
     setAnalysisResult(null);
@@ -300,63 +282,43 @@ export default function Home() {
 
         {/* ── STEP 1: Input & Location ─────────────────────────────── */}
         {(step === 1 || step === 2) && (
-          <div className="space-y-5">
-            {/* Quick preset buttons */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-              <h3 className="font-semibold text-slate-700 text-sm mb-3 flex items-center gap-2">
-                <span className="w-6 h-6 bg-[#1a3c6e] rounded-full text-white text-xs flex items-center justify-center font-bold">1</span>
-                Quick Demo Scenarios
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {DEMO_PRESETS.map((preset) => (
-                  <button
-                    key={preset.seedId}
-                    onClick={() => handlePreset(preset)}
-                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-left text-sm font-medium transition-all hover:shadow-sm ${
-                      grievanceText === preset.text
-                        ? "border-blue-500 bg-blue-50 text-blue-700"
-                        : "border-slate-200 bg-slate-50 hover:border-slate-300 text-slate-700"
-                    }`}
-                  >
-                    <span className="text-lg">{preset.icon}</span>
-                    <span className="leading-tight">{preset.label}</span>
-                  </button>
-                ))}
+          <div className="space-y-4">
+            {/* Complaint description */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="bg-slate-50 border-b border-slate-200 px-5 py-4">
+                <h3 className="font-semibold text-slate-800 text-sm">
+                  Describe Your Grievance
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Type or tap the microphone to speak. Include location landmarks and issue details.
+                </p>
+              </div>
+              <div className="p-5">
+                <VoiceTextRecorder
+                  text={grievanceText}
+                  onTextChange={setGrievanceText}
+                  language={language}
+                />
               </div>
             </div>
 
-            {/* Voice & Text Input */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-              <h3 className="font-semibold text-slate-700 text-sm mb-4 flex items-center gap-2">
-                <span className="w-6 h-6 bg-[#1a3c6e] rounded-full text-white text-xs flex items-center justify-center font-bold">2</span>
-                Describe Your Grievance
-                <span className="ml-auto text-xs text-slate-400 font-normal">Voice or Text</span>
-              </h3>
-              <VoiceTextRecorder
-                text={grievanceText}
-                onTextChange={setGrievanceText}
-                onAudioFile={(f) => setAudioFile(f)}
-                language={language}
-              />
-              {audioFile && (
-                <p className="mt-2 text-xs text-blue-600 bg-blue-50 rounded-lg px-3 py-1.5">
-                  🎙️ Audio recorded: <strong>{audioFile.name}</strong> · Will be transcribed during analysis
-                </p>
-              )}
-            </div>
-
             {/* Location */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-              <h3 className="font-semibold text-slate-700 text-sm mb-4 flex items-center gap-2">
-                <span className="w-6 h-6 bg-[#1a3c6e] rounded-full text-white text-xs flex items-center justify-center font-bold">3</span>
-                Pinpoint Location
-                <span className="ml-auto text-xs text-slate-400 font-normal">4 detection layers</span>
-              </h3>
-              <LocationPicker
-                location={location}
-                onLocationChange={setLocation}
-                suggestedLocation={suggestedLocation}
-              />
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="bg-slate-50 border-b border-slate-200 px-5 py-4">
+                <h3 className="font-semibold text-slate-800 text-sm">
+                  Pinpoint Location
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Use GPS, upload a photo, or drag the pin on the map to mark the exact spot.
+                </p>
+              </div>
+              <div className="p-5">
+                <LocationPicker
+                  location={location}
+                  onLocationChange={setLocation}
+                  suggestedLocation={suggestedLocation}
+                />
+              </div>
             </div>
 
             {/* Duplicate banner */}

@@ -83,33 +83,3 @@ export const CITIZEN_PROFILE = {
 };
 
 export const BENGALURU_CENTER = { lat: 12.9716, lng: 77.5946 };
-
-export const DEMO_PRESETS = [
-  {
-    label: "Water Leak (Koramangala)",
-    icon: "💧",
-    text: "There is a major water main burst on 10th Main Road, Koramangala. Water is gushing out and flooding the road near the signal. BWSSB needs to send a repair crew immediately.",
-    lat: 12.9344,
-    lng: 77.6251,
-    category: "Water Supply" as GrievanceCategory,
-    seedId: "GRV-001",
-  },
-  {
-    label: "Pothole Cluster (Bellandur)",
-    icon: "🕳️",
-    text: "There are multiple deep potholes outside Columbia Asia Hospital in Bellandur. An auto-rickshaw lost its tyre this morning. This stretch of road is extremely dangerous.",
-    lat: 12.9279,
-    lng: 77.6801,
-    category: "Roads" as GrievanceCategory,
-    seedId: "GRV-002",
-  },
-  {
-    label: "Garbage Pile (Indiranagar)",
-    icon: "🗑️",
-    text: "Garbage has not been cleared for 5 days near Indiranagar Metro Station. The pile is huge, smells terrible, and is causing a health hazard. BBMP sweepers have not visited the area.",
-    lat: 12.9784,
-    lng: 77.6386,
-    category: "Sanitation" as GrievanceCategory,
-    seedId: "GRV-003",
-  },
-];

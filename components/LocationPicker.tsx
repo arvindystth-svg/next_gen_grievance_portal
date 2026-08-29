@@ -10,7 +10,7 @@ interface LocationData {
   ward?: string;
   zone?: string;
   locality?: string;
-  source: "gps" | "exif" | "nlp" | "manual" | "preset";
+  source: "gps" | "exif" | "nlp" | "manual";
 }
 
 interface LocationPickerProps {
@@ -54,7 +54,6 @@ const SOURCE_LABELS: Record<LocationData["source"], string> = {
   exif: "📷 Photo EXIF",
   nlp: "🤖 AI Text Extraction",
   manual: "✏️ Manually placed",
-  preset: "⚡ Demo preset",
 };
 
 export default function LocationPicker({
