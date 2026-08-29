@@ -1,3 +1,5 @@
+import { EXPANDED_BENGALURU_WARDS } from "./bengaluruWardsData";
+
 export interface BengaluruWard {
   name: string;
   zone: string;
@@ -5,23 +7,11 @@ export interface BengaluruWard {
   lng: number;
   radius: number;
   locality: string;
+  searchTerms?: string[];
 }
 
-/** Representative BBMP wards / localities for Bengaluru south & east coverage */
-export const BENGALURU_WARDS: BengaluruWard[] = [
-  { name: "Ward 151 - Koramangala", zone: "South Zone", lat: 12.9344, lng: 77.6251, radius: 0.025, locality: "Koramangala" },
-  { name: "Ward 150 - Bellandur", zone: "East Zone", lat: 12.9279, lng: 77.6801, radius: 0.03, locality: "Bellandur" },
-  { name: "Ward 80 - Hoysala Nagar", zone: "East Zone", lat: 12.9784, lng: 77.6386, radius: 0.025, locality: "Indiranagar" },
-  { name: "Ward 85 - Domlur", zone: "East Zone", lat: 12.9611, lng: 77.6387, radius: 0.02, locality: "Domlur" },
-  { name: "Ward 103 - Jayanagar", zone: "South Zone", lat: 12.9308, lng: 77.5836, radius: 0.025, locality: "Jayanagar" },
-  { name: "Ward 69 - Shivajinagar", zone: "Central Zone", lat: 12.9867, lng: 77.6044, radius: 0.02, locality: "Shivajinagar" },
-  { name: "Ward 63 - Hebbal", zone: "North Zone", lat: 13.0358, lng: 77.5973, radius: 0.025, locality: "Hebbal" },
-  { name: "Ward 162 - BTM Layout", zone: "South Zone", lat: 12.9166, lng: 77.6101, radius: 0.025, locality: "BTM Layout" },
-  { name: "Ward 168 - JP Nagar", zone: "South Zone", lat: 12.9068, lng: 77.5851, radius: 0.03, locality: "JP Nagar" },
-  { name: "Ward 198 - Whitefield", zone: "East Zone", lat: 12.9698, lng: 77.7499, radius: 0.04, locality: "Whitefield" },
-  { name: "Ward 45 - Malleshwaram", zone: "West Zone", lat: 13.0067, lng: 77.5707, radius: 0.02, locality: "Malleshwaram" },
-  { name: "Ward 128 - Banashankari", zone: "South Zone", lat: 12.9255, lng: 77.5468, radius: 0.03, locality: "Banashankari" },
-];
+/** BBMP wards and localities across Bengaluru */
+export const BENGALURU_WARDS: BengaluruWard[] = EXPANDED_BENGALURU_WARDS;
 
 const LOCALITY_ALIASES: Record<string, string> = {
   koramangala: "Koramangala",
@@ -31,7 +21,7 @@ const LOCALITY_ALIASES: Record<string, string> = {
   domlur: "Domlur",
   jayanagar: "Jayanagar",
   hebbal: "Hebbal",
-  "btm": "BTM Layout",
+  btm: "BTM Layout",
   "btm layout": "BTM Layout",
   "jp nagar": "JP Nagar",
   whitefield: "Whitefield",
@@ -44,7 +34,91 @@ const LOCALITY_ALIASES: Record<string, string> = {
   "electronic city": "Electronic City",
   yelahanka: "Yelahanka",
   rajajinagar: "Rajajinagar",
+  "rr nagar": "RR Nagar",
+  "r r nagar": "RR Nagar",
+  "kr puram": "KR Puram",
+  "k r puram": "KR Puram",
+  mahadevapura: "Mahadevapura",
+  sarjapur: "Sarjapur Road",
+  hoodi: "Hoodi",
+  brookefield: "Brookefield",
+  varthur: "Varthur",
+  kadugodi: "Kadugodi",
+  itpl: "ITPL",
+  silkboard: "Silk Board",
+  "silk board": "Silk Board",
+  basavanagudi: "Basavanagudi",
+  vijayanagar: "Vijayanagar",
+  nagarbhavi: "Nagarbhavi",
+  kengeri: "Kengeri",
+  yeshwanthpur: "Yeshwanthpur",
+  peenya: "Peenya",
+  thanisandra: "Thanisandra",
+  kammanahalli: "Kammanahalli",
+  banaswadi: "Banaswadi",
+  frazer: "Frazer Town",
+  "frazer town": "Frazer Town",
+  ulsoor: "Ulsoor",
+  mgroad: "MG Road",
+  "mg road": "MG Road",
+  bommanahalli: "Bommanahalli",
+  electroniccity: "Electronic City",
+  hoysala: "Indiranagar",
+  "hoysala nagar": "Indiranagar",
 };
+
+function wardHaystack(ward: BengaluruWard): string {
+  return [
+    ward.name,
+    ward.locality,
+    ward.zone,
+    ...(ward.searchTerms ?? []),
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+export function formatWardLabel(ward: BengaluruWard): string {
+  return `${ward.locality} · ${ward.name} (${ward.zone})`;
+}
+
+export function searchWards(query: string, limit = 12): BengaluruWard[] {
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    return BENGALURU_WARDS.slice(0, limit);
+  }
+
+  const tokens = q.split(/\s+/).filter(Boolean);
+
+  const scored = BENGALURU_WARDS.map((ward) => {
+    const haystack = wardHaystack(ward);
+    const locality = ward.locality.toLowerCase();
+    const name = ward.name.toLowerCase();
+    let score = 0;
+
+    if (locality === q) score += 120;
+    else if (locality.startsWith(q)) score += 90;
+    else if (locality.includes(q)) score += 70;
+
+    if (name.startsWith(q)) score += 80;
+    else if (name.includes(q)) score += 55;
+
+    if (ward.zone.toLowerCase().includes(q)) score += 25;
+
+    const wardNum = ward.name.match(/ward\s+(\d+)/i)?.[1];
+    if (wardNum && (q === wardNum || q === `ward ${wardNum}`)) score += 100;
+
+    for (const token of tokens) {
+      if (haystack.includes(token)) score += 15;
+    }
+
+    return { ward, score };
+  })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.ward.locality.localeCompare(b.ward.locality));
+
+  return scored.slice(0, limit).map((entry) => entry.ward);
+}
 
 export function getWardForCoordinates(lat: number, lng: number): BengaluruWard {
   let closest = BENGALURU_WARDS[0];
@@ -59,6 +133,10 @@ export function getWardForCoordinates(lat: number, lng: number): BengaluruWard {
   return closest;
 }
 
+function wardFromMatch(ward: BengaluruWard) {
+  return { ward: ward.name, zone: ward.zone, locality: ward.locality };
+}
+
 /** Try to infer ward/locality from complaint or summary text */
 export function extractAreaFromText(text: string): {
   ward: string;
@@ -67,7 +145,12 @@ export function extractAreaFromText(text: string): {
 } | null {
   const lower = text.toLowerCase();
 
-  for (const ward of BENGALURU_WARDS) {
+  // Prefer longer locality matches first to avoid partial hits
+  const byLocalityLength = [...BENGALURU_WARDS].sort(
+    (a, b) => b.locality.length - a.locality.length
+  );
+
+  for (const ward of byLocalityLength) {
     const localityLower = ward.locality.toLowerCase();
     const wardNum = ward.name.match(/Ward\s+(\d+)/i)?.[1];
     if (
@@ -75,7 +158,7 @@ export function extractAreaFromText(text: string): {
       (wardNum && lower.includes(`ward ${wardNum}`)) ||
       lower.includes(ward.name.toLowerCase())
     ) {
-      return { ward: ward.name, zone: ward.zone, locality: ward.locality };
+      return wardFromMatch(ward);
     }
   }
 
@@ -83,7 +166,7 @@ export function extractAreaFromText(text: string): {
     if (lower.includes(alias)) {
       const match = BENGALURU_WARDS.find((w) => w.locality === locality);
       if (match) {
-        return { ward: match.name, zone: match.zone, locality: match.locality };
+        return wardFromMatch(match);
       }
       return {
         ward: `Area - ${locality}`,
@@ -103,10 +186,17 @@ export function extractAreaFromText(text: string): {
 }
 
 export function wardOptions(): string[] {
-  return BENGALURU_WARDS.map((w) => `${w.name} · ${w.locality}`);
+  return BENGALURU_WARDS.map((w) => formatWardLabel(w));
 }
 
 export function parseWardOption(option: string): BengaluruWard | null {
-  const ward = BENGALURU_WARDS.find((w) => `${w.name} · ${w.locality}` === option);
-  return ward ?? null;
+  return BENGALURU_WARDS.find((w) => formatWardLabel(w) === option) ?? null;
+}
+
+export function wardToArea(ward: BengaluruWard) {
+  return {
+    ward: ward.name,
+    zone: ward.zone,
+    locality: ward.locality,
+  };
 }
