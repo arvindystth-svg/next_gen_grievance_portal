@@ -10,6 +10,7 @@ import {
   validateSupplementalDetail,
 } from "@/lib/complaintCompleteness";
 import WardAreaSelector from "@/components/WardAreaSelector";
+import { useLanguage } from "@/lib/LanguageContext";
 
 interface CompletenessCardProps {
   report: CompletenessReport;
@@ -48,6 +49,7 @@ export default function CompletenessCard({
   onWardAreaChange,
   onFixField,
 }: CompletenessCardProps) {
+  const { t } = useLanguage();
   const { score, missing, completed, fields } = report;
 
   const interactiveToShow = fields.filter(
@@ -67,14 +69,14 @@ export default function CompletenessCard({
     return true;
   });
 
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(score < 100);
   const missingLabels = missing.map((f) => f.label);
   const collapsedSummary =
     score >= 100
-      ? "All key details captured"
+      ? t("completeness.allCaptured")
       : missingLabels.length > 0
-      ? `Needs: ${missingLabels.slice(0, 3).join(", ")}${missingLabels.length > 3 ? "…" : ""}`
-      : "Some details still needed";
+      ? t("completeness.needs", { items: `${missingLabels.slice(0, 3).join(", ")}${missingLabels.length > 3 ? "…" : ""}` })
+      : t("completeness.someNeeded");
 
   return (
     <div
@@ -96,12 +98,12 @@ export default function CompletenessCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-              Complaint Completeness
+              {t("completeness.title")}
             </p>
             <div className="flex items-center gap-2 flex-shrink-0">
               <div className="text-right">
                 <div className={`text-lg font-black leading-none ${scoreColor(score)}`}>{score}%</div>
-                <div className="text-[9px] text-slate-500 uppercase tracking-wider">Complete</div>
+                <div className="text-[9px] text-slate-500 uppercase tracking-wider">{t("completeness.complete")}</div>
               </div>
               <ChevronDown
                 size={14}
@@ -127,9 +129,7 @@ export default function CompletenessCard({
         <>
       <div className="px-5 py-3 border-t border-inherit bg-white/50">
         <p className="text-sm text-slate-700">
-          {score >= 100
-            ? "All key details captured — continue to summary."
-            : "Fill missing details below. Values auto-filled from your complaint can be changed."}
+          {score >= 100 ? t("completeness.allDone") : t("completeness.fillHint")}
         </p>
         <div className="h-2.5 bg-white/70 rounded-full overflow-hidden mt-3">
           <div
@@ -143,7 +143,7 @@ export default function CompletenessCard({
         <div className="px-5 py-4 space-y-3">
           <p className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
             <AlertCircle size={13} className="text-amber-600" />
-            Missing details
+            {t("completeness.missing")}
           </p>
           <ul className="space-y-3">
             {interactiveToShow.map((field) => {
@@ -165,12 +165,12 @@ export default function CompletenessCard({
                     {isAutoFilled && (
                       <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
                         <Sparkles size={9} />
-                        Auto-filled
+                        {t("completeness.autofilled")}
                       </span>
                     )}
                     {field.completed && !isAutoFilled && (
                       <span className="text-[10px] font-bold text-green-600 bg-green-100 px-1.5 py-0.5 rounded-full">
-                        Added
+                        {t("completeness.added")}
                       </span>
                     )}
                   </div>
@@ -178,7 +178,7 @@ export default function CompletenessCard({
 
                   {isAutoFilled && (
                     <p className="text-[11px] text-blue-600 mb-2">
-                      Auto-filled based on your complaint — change below if incorrect.
+                      {t("completeness.autofilledHint")}
                     </p>
                   )}
 
@@ -228,12 +228,12 @@ export default function CompletenessCard({
                     {detailId !== "ward" && validationStatus === "valid" && (
                       <p className="text-[11px] text-green-600 mt-1.5 flex items-center gap-1">
                         <CheckCircle2 size={11} />
-                        Accepted — completeness updated
+                        {t("completeness.accepted")}
                       </p>
                     )}
                     {detailId !== "ward" && validationStatus === "pending" && value.trim() && (
                       <p className="text-[11px] text-amber-600 mt-1.5">
-                        Keep typing — e.g. {config.placeholder}
+                        {t("completeness.keepTyping", { example: config.placeholder })}
                       </p>
                     )}
                   </div>
@@ -256,7 +256,7 @@ export default function CompletenessCard({
                   onClick={() => onFixField(field.id)}
                   className="mt-2 text-xs font-semibold text-[#1a3c6e] hover:underline flex items-center gap-0.5"
                 >
-                  Go to routing section
+                  {t("completeness.goRouting")}
                   <ChevronRight size={12} />
                 </button>
               )}
@@ -273,7 +273,7 @@ export default function CompletenessCard({
         >
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
             <CheckCircle2 size={13} className="text-green-600" />
-            Provided ({providedDisplay.length})
+            {t("completeness.provided", { n: providedDisplay.length })}
           </p>
           <div className="flex flex-wrap gap-1.5">
             {providedDisplay.map((field) => (

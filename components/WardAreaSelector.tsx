@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Search, ChevronDown, X, Check, MapPin } from "lucide-react";
-import { BengaluruWard, formatWardLabel, searchWards, wardToArea } from "@/lib/bengaluruAreas";
+import { BengaluruWard, searchWards, wardToArea } from "@/lib/bengaluruAreas";
 
 export interface WardAreaValue {
   ward: string;

@@ -361,7 +361,7 @@ export async function GET() {
   return NextResponse.json({
     status: "ok",
     service: "AI CPGRAMS Grievance Analyzer",
-    version: "1.2",
+    version: "1.3",
     openai_configured: hasOpenAI,
     sarvam_configured: hasSarvam,
     models,

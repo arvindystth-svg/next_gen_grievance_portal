@@ -11,8 +11,7 @@ import {
   MessageSquare,
   CheckCircle2,
 } from "lucide-react";
-import CitizenVerifyPanel from "@/components/CitizenVerifyPanel";
-import { CitizenSession } from "@/lib/citizenSession";
+import { useLanguage } from "@/lib/LanguageContext";
 import {
   ComplaintRecord,
   ComplaintStatus,
@@ -20,12 +19,10 @@ import {
   formatComplaintDate,
   updateComplaintFeedback,
 } from "@/lib/complaintHistory";
+import { TranslationKey } from "@/lib/i18n";
 
 interface ComplaintHistoryProps {
-  citizenSession: CitizenSession | null;
   complaints: ComplaintRecord[];
-  demoComplaints: ComplaintRecord[];
-  onVerified: (session: CitizenSession) => void;
   onUpdate: (complaints: ComplaintRecord[]) => void;
 }
 
@@ -66,9 +63,11 @@ function StarRating({
 function ComplaintCard({
   complaint,
   onFeedback,
+  statusLabel,
 }: {
   complaint: ComplaintRecord;
   onFeedback: (id: string, rating: number) => void;
+  statusLabel: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const style = STATUS_STYLES[complaint.status];
@@ -93,7 +92,7 @@ function ComplaintCard({
               <span
                 className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${style.bg} ${style.text} ${style.border}`}
               >
-                {complaint.status}
+                {statusLabel}
               </span>
             </div>
             <p className="text-sm text-slate-800 line-clamp-2 leading-snug">
@@ -196,47 +195,21 @@ function ComplaintCard({
   );
 }
 
-export default function ComplaintHistory({
-  citizenSession,
-  complaints,
-  demoComplaints,
-  onVerified,
-  onUpdate,
-}: ComplaintHistoryProps) {
-  const [showDemo, setShowDemo] = useState(false);
+export default function ComplaintHistory({ complaints, onUpdate }: ComplaintHistoryProps) {
+  const { t } = useLanguage();
 
   const handleFeedback = (id: string, rating: number) => {
     const updated = updateComplaintFeedback(id, rating);
     onUpdate(updated);
   };
 
-  if (!citizenSession) {
-    return (
-      <CitizenVerifyPanel
-        title="Verify to see your complaints"
-        description="Use your mobile number or DigiLocker — no reference IDs to remember. Your name and full number are never shown."
-        onVerified={onVerified}
-      />
-    );
-  }
+  const statusLabel = (status: ComplaintStatus) =>
+    t(`status.${status}` as TranslationKey);
 
   if (complaints.length === 0) {
     return (
-      <div className="space-y-4">
-        <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center">
-          <p className="text-slate-700 text-sm font-medium">No complaints filed yet for this verification.</p>
-          <p className="text-slate-500 text-xs mt-1">
-            File a grievance — it will appear here automatically after you submit.
-          </p>
-        </div>
-        {demoComplaints.length > 0 && (
-          <DemoSection
-            complaints={demoComplaints}
-            expanded={showDemo}
-            onToggle={() => setShowDemo((v) => !v)}
-            onFeedback={handleFeedback}
-          />
-        )}
+      <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
+        <p className="text-slate-500 text-sm">{t("history.empty")}</p>
       </div>
     );
   }
@@ -251,11 +224,10 @@ export default function ComplaintHistory({
 
   return (
     <div className="space-y-4">
-      {/* Summary stats */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white border border-slate-200 rounded-xl p-3 text-center">
           <div className="text-xl font-bold text-[#1a3c6e]">{complaints.length}</div>
-          <div className="text-[10px] text-slate-500 uppercase tracking-wider">Total Filed</div>
+          <div className="text-[10px] text-slate-500 uppercase tracking-wider">{t("history.total")}</div>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-3 text-center">
           <div className="text-xl font-bold text-amber-600">
@@ -264,63 +236,26 @@ export default function ComplaintHistory({
               (statusCounts["Under Review"] || 0) +
               (statusCounts["Submitted"] || 0)}
           </div>
-          <div className="text-[10px] text-slate-500 uppercase tracking-wider">Active</div>
+          <div className="text-[10px] text-slate-500 uppercase tracking-wider">{t("history.active")}</div>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-3 text-center">
           <div className="text-xl font-bold text-green-600">
             {(statusCounts["Resolved"] || 0) + (statusCounts["Closed"] || 0)}
           </div>
-          <div className="text-[10px] text-slate-500 uppercase tracking-wider">Resolved</div>
+          <div className="text-[10px] text-slate-500 uppercase tracking-wider">{t("history.resolved")}</div>
         </div>
       </div>
 
-      {/* List */}
       <div className="space-y-3">
         {complaints.map((c) => (
-          <ComplaintCard key={c.id} complaint={c} onFeedback={handleFeedback} />
+          <ComplaintCard
+            key={c.id}
+            complaint={c}
+            onFeedback={handleFeedback}
+            statusLabel={statusLabel(c.status)}
+          />
         ))}
       </div>
-
-      {demoComplaints.length > 0 && (
-        <DemoSection
-          complaints={demoComplaints}
-          expanded={showDemo}
-          onToggle={() => setShowDemo((v) => !v)}
-          onFeedback={handleFeedback}
-        />
-      )}
-    </div>
-  );
-}
-
-function DemoSection({
-  complaints,
-  expanded,
-  onToggle,
-  onFeedback,
-}: {
-  complaints: ComplaintRecord[];
-  expanded: boolean;
-  onToggle: () => void;
-  onFeedback: (id: string, rating: number) => void;
-}) {
-  return (
-    <div className="border border-dashed border-slate-300 rounded-xl overflow-hidden">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full px-4 py-3 text-left bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-600 flex items-center justify-between"
-      >
-        <span>Sample complaints (demonstration only)</span>
-        <ChevronDown size={14} className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
-      </button>
-      {expanded && (
-        <div className="p-3 space-y-3 bg-white">
-          {complaints.map((c) => (
-            <ComplaintCard key={c.id} complaint={c} onFeedback={onFeedback} />
-          ))}
-        </div>
-      )}
     </div>
   );
 }

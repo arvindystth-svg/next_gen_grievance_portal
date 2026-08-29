@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, Tag, Building2, Landmark } from "lucide-react";
 import DepartmentSelector from "@/components/DepartmentSelector";
+import { useLanguage } from "@/lib/LanguageContext";
 
 interface RoutingPanelProps {
   localDepartments: string[];
@@ -24,6 +25,7 @@ export default function RoutingPanel({
   routingUpdated,
 }: RoutingPanelProps) {
   const [expanded, setExpanded] = useState(false);
+  const { t } = useLanguage();
 
   return (
     <div id="routing-section" className="rounded-xl border border-slate-200 bg-slate-50/80 overflow-hidden">
@@ -36,7 +38,7 @@ export default function RoutingPanel({
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-              Classification &amp; Routing
+              {t("routing.title")}
             </p>
             <ChevronDown
               size={14}
@@ -50,7 +52,7 @@ export default function RoutingPanel({
                 <span className="line-clamp-2">
                   {localDepartments.length
                     ? localDepartments.join(" · ")
-                    : "No local department selected"}
+                    : t("routing.noLocal")}
                 </span>
               </p>
               <p className="text-[11px] text-slate-500 flex items-start gap-1.5">
@@ -58,13 +60,13 @@ export default function RoutingPanel({
                 <span className="line-clamp-1">
                   {cpgramsCategories.length
                     ? cpgramsCategories.join(" · ")
-                    : "No central ministry selected"}
+                    : t("routing.noCentral")}
                 </span>
               </p>
             </div>
           )}
           {routingUpdated && !expanded && (
-            <p className="text-[10px] text-green-600 mt-1">Updated from your summary edits</p>
+            <p className="text-[10px] text-green-600 mt-1">{t("routing.updatedFromSummary")}</p>
           )}
         </div>
       </button>
@@ -73,21 +75,21 @@ export default function RoutingPanel({
         <div className="px-3 pb-3 pt-1 space-y-2 border-t border-slate-200 bg-white">
           <DepartmentSelector
             compact
-            label="Local (BBMP / BWSSB / BESCOM)"
+            label={t("routing.local")}
             selected={localDepartments}
             options={localOptions}
             onChange={onLocalChange}
             chipClassName="bg-blue-100 text-blue-700 border-blue-200"
-            placeholder="Search departments…"
+            placeholder={t("routing.searchDepts")}
           />
           <DepartmentSelector
             compact
-            label="Central (CPGRAMS)"
+            label={t("routing.central")}
             selected={cpgramsCategories}
             options={cpgramsOptions}
             onChange={onCpgramsChange}
             chipClassName="bg-purple-100 text-purple-700 border-purple-200"
-            placeholder="Search ministries…"
+            placeholder={t("routing.searchMinistries")}
           />
         </div>
       )}

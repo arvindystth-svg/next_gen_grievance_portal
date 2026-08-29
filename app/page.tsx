@@ -9,7 +9,6 @@ import CompletenessCard from "@/components/CompletenessCard";
 import AnalysisLoading from "@/components/AnalysisLoading";
 import RoutingPanel from "@/components/RoutingPanel";
 import ComplaintSummaryReview from "@/components/ComplaintSummaryReview";
-import CitizenVerifyPanel from "@/components/CitizenVerifyPanel";
 import { assessComplaintCompleteness, SupplementalDetailId, SupplementalDetails, formatSupplementalForSummary, buildScoringSupplemental, extractAutoFillSupplemental } from "@/lib/complaintCompleteness";
 import { extractAreaFromText } from "@/lib/bengaluruAreas";
 import {
@@ -18,16 +17,10 @@ import {
   cpgramsForLocalDepartments,
 } from "@/lib/departments";
 import {
-  getComplaintsForCitizen,
-  getDemoComplaints,
+  getComplaintHistory,
   saveComplaintToHistory,
   ComplaintRecord,
 } from "@/lib/complaintHistory";
-import {
-  loadCitizenSession,
-  clearCitizenSession,
-  CitizenSession,
-} from "@/lib/citizenSession";
 import {
   loadComplaintDraft,
   saveComplaintDraft,
@@ -35,6 +28,8 @@ import {
   formatDraftSavedAt,
   ComplaintDraft,
 } from "@/lib/complaintDraft";
+import { LanguageProvider, useLanguage } from "@/lib/LanguageContext";
+import { isLanguageCode } from "@/lib/i18n";
 import {
   SEED_GRIEVANCES,
   SeedGrievance,
@@ -143,12 +138,13 @@ function StepIndicator({
   isSubmitted: boolean;
   onStepClick: (step: Step) => void;
 }) {
+  const { t } = useLanguage();
   const steps = [
-    { num: 1 as Step, label: "Describe" },
-    { num: 2 as Step, label: "Analyze" },
-    { num: 3 as Step, label: "Review" },
-    { num: 4 as Step, label: "Summary" },
-    { num: 5 as Step, label: "Submit" },
+    { num: 1 as Step, label: t("step.describe") },
+    { num: 2 as Step, label: t("step.analyze") },
+    { num: 3 as Step, label: t("step.review") },
+    { num: 4 as Step, label: t("step.summary") },
+    { num: 5 as Step, label: t("step.submit") },
   ];
   return (
     <div className="flex items-center justify-center gap-0">
@@ -163,9 +159,9 @@ function StepIndicator({
                 onClick={() => navigable && onStepClick(step.num)}
                 title={
                   navigable
-                    ? `Go back to ${step.label}`
+                    ? t("step.goBack", { label: step.label })
                     : isAnalyzing
-                    ? "Please wait for analysis to finish"
+                    ? t("step.waitAnalysis")
                     : undefined
                 }
                 className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
@@ -220,9 +216,17 @@ function StepBackButton({ label, onClick }: { label: string; onClick: () => void
 }
 
 export default function Home() {
+  return (
+    <LanguageProvider>
+      <HomeContent />
+    </LanguageProvider>
+  );
+}
+
+function HomeContent() {
+  const { language, setLanguage, t } = useLanguage();
   const [activeView, setActiveView] = useState<ActiveView>("file");
   const [step, setStep] = useState<Step>(1);
-  const [language, setLanguage] = useState("en");
   const [grievanceText, setGrievanceText] = useState("");
   const [location, setLocation] = useState<LocationData | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<GrievanceCategory | undefined>();
@@ -259,17 +263,15 @@ export default function Home() {
   const [geocodeFailed, setGeocodeFailed] = useState(false);
   const [draftRestored, setDraftRestored] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
-  const [citizenSession, setCitizenSession] = useState<CitizenSession | null>(null);
-  const [showSubmitVerify, setShowSubmitVerify] = useState(false);
   const draftReadyRef = useRef(false);
   const draftStateRef = useRef<ComplaintDraft | null>(null);
 
   useEffect(() => {
-    setCitizenSession(loadCitizenSession());
+    setComplaints(getComplaintHistory());
     const draft = loadComplaintDraft();
     if (draft) {
       setActiveView(draft.activeView);
-      setLanguage(draft.language);
+      if (isLanguageCode(draft.language)) setLanguage(draft.language);
       setGrievanceText(draft.grievanceText);
       setLocation(draft.location);
       setSelectedCategory(draft.selectedCategory);
@@ -291,27 +293,7 @@ export default function Home() {
       setDraftRestored(true);
     }
     draftReadyRef.current = true;
-  }, []);
-
-  const refreshComplaints = (session: CitizenSession | null = citizenSession) => {
-    setComplaints(getComplaintsForCitizen(session?.citizenHash ?? null));
-  };
-
-  useEffect(() => {
-    refreshComplaints(citizenSession);
-  }, [citizenSession]);
-
-  const handleCitizenVerified = (session: CitizenSession) => {
-    setCitizenSession(session);
-    setShowSubmitVerify(false);
-    refreshComplaints(session);
-  };
-
-  const handleCitizenSignOut = () => {
-    clearCitizenSession();
-    setCitizenSession(null);
-    refreshComplaints(null);
-  };
+  }, [setLanguage]);
 
   useEffect(() => {
     const update = () => setIsOnline(navigator.onLine);
@@ -523,7 +505,7 @@ export default function Home() {
 
   const handleContinueFromDescribe = () => {
     if (!grievanceText.trim() || grievanceText.trim().length < 10) {
-      setAnalysisError("Please describe your grievance in at least 10 characters.");
+      setAnalysisError(t("describe.minChars"));
       return;
     }
     if (canSkipReanalysis()) {
@@ -685,7 +667,7 @@ export default function Home() {
 
   const handleAnalyze = async () => {
     if (!grievanceText.trim() || grievanceText.trim().length < 10) {
-      setAnalysisError("Please describe your grievance in at least 10 characters.");
+      setAnalysisError(t("describe.minChars"));
       return;
     }
     if (canSkipReanalysis()) {
@@ -760,15 +742,6 @@ export default function Home() {
 
   const handleSubmit = async () => {
     if (isSubmitting || submittedId) return;
-    if (!citizenSession) {
-      setShowSubmitVerify(true);
-      return;
-    }
-    await completeSubmit(citizenSession.citizenHash);
-  };
-
-  const completeSubmit = async (citizenHash: string) => {
-    if (isSubmitting || submittedId) return;
     setIsSubmitting(true);
     await new Promise((r) => setTimeout(r, 1500));
     const id = `GRV-BLR-${Date.now().toString().slice(-6)}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
@@ -788,9 +761,8 @@ export default function Home() {
         urgency: analysisResult.urgency,
         ward: selectedArea?.ward || location?.ward || analysisResult.location.ward,
         locality: selectedArea?.locality || location?.locality || analysisResult.location.locality,
-        citizenHash,
       };
-      setComplaints(saveComplaintToHistory(record, citizenHash));
+      setComplaints(saveComplaintToHistory(record));
     }
 
     setSubmittedId(id);
@@ -799,7 +771,6 @@ export default function Home() {
     clearComplaintDraft();
     setDraftRestored(false);
     setDraftSavedAt(null);
-    setShowSubmitVerify(false);
     setIsSubmitting(false);
   };
 
@@ -848,12 +819,8 @@ export default function Home() {
       <div className="flex-shrink-0 z-50 bg-slate-100 border-b border-slate-200/80 shadow-sm">
         <Header
           embedded
-          selectedLanguage={language}
-          onLanguageChange={setLanguage}
           isOnline={isOnline}
           offlineQueueCount={offlineQueueCount}
-          citizenSession={citizenSession}
-          onSignOut={handleCitizenSignOut}
           onMyComplaintsClick={() => {
             if (step === 5 && submittedId) handleReset();
             setActiveView("history");
@@ -864,11 +831,11 @@ export default function Home() {
         <div className="max-w-2xl mx-auto px-4 pt-2 pb-2">
           <div className="text-center mb-2">
             <h2 className="text-lg font-bold text-[#1a3c6e] leading-tight">
-              {activeView === "history" ? "My Complaint History" : "File a Civic Grievance"}
+              {activeView === "history" ? t("hero.historyTitle") : t("hero.fileTitle")}
             </h2>
             {activeView === "history" && (
               <p className="text-slate-500 text-xs mt-0.5">
-                Track status, resolutions, and rate closed complaints
+                {t("hero.historySubtitle")}
               </p>
             )}
           </div>
@@ -887,7 +854,7 @@ export default function Home() {
               }`}
             >
               <PlusCircle size={14} />
-              File Complaint
+              {t("tab.file")}
             </button>
             <button
               type="button"
@@ -899,7 +866,7 @@ export default function Home() {
               }`}
             >
               <History size={14} />
-              My Complaints
+              {t("tab.history")}
               {complaints.length > 0 && (
                 <span className="bg-[#1a3c6e] text-white text-[9px] font-bold px-1 py-0 rounded-full min-w-[14px] text-center">
                   {complaints.length}
@@ -928,10 +895,7 @@ export default function Home() {
         {/* ── HISTORY VIEW ─────────────────────────────────────────── */}
         {activeView === "history" && (
           <ComplaintHistory
-            citizenSession={citizenSession}
             complaints={complaints}
-            demoComplaints={getDemoComplaints()}
-            onVerified={handleCitizenVerified}
             onUpdate={setComplaints}
           />
         )}
@@ -943,10 +907,11 @@ export default function Home() {
           <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
             <FileText size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-amber-900">Draft restored</p>
+              <p className="text-sm font-semibold text-amber-900">{t("draft.restored")}</p>
               <p className="text-xs text-amber-800 mt-0.5">
-                Your in-progress complaint was saved automatically
-                {draftSavedAt ? ` on ${formatDraftSavedAt(draftSavedAt)}` : ""}. Continue where you left off.
+                {draftSavedAt
+                  ? t("draft.restoredBody", { date: formatDraftSavedAt(draftSavedAt) })
+                  : t("draft.restoredBodyNoDate")}
               </p>
             </div>
             <button
@@ -963,25 +928,25 @@ export default function Home() {
           <div className="space-y-4">
             {maxStepReached >= 3 && (
               <StepBackButton
-                label="Back to Review"
+                label={t("describe.backToReview")}
                 onClick={() => goToStep(3)}
               />
             )}
             {maxStepReached >= 3 && (
               <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700">
                 {canSkipReanalysis()
-                  ? "No changes to your description — you can continue straight to review without re-running AI analysis."
-                  : "You returned to edit your complaint. Update your description to refresh the AI summary."}
+                  ? t("describe.skipReanalysis")
+                  : t("describe.editPrompt")}
               </div>
             )}
             {/* Complaint description */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="bg-slate-50 border-b border-slate-200 px-5 py-4">
                 <h3 className="font-semibold text-slate-800 text-sm">
-                  Describe Your Grievance
+                  {t("describe.title")}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Type or tap the microphone to speak. Include issue details and any landmarks you know.
+                  {t("describe.hint")}
                 </p>
               </div>
               <div className="p-5">
@@ -1007,7 +972,7 @@ export default function Home() {
               className="w-full bg-[#1a3c6e] hover:bg-[#2563eb] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
             >
               <Sparkles size={18} />
-              {canSkipReanalysis() ? "Continue to Review" : "Continue to AI Analysis"}
+              {canSkipReanalysis() ? t("describe.continueReview") : t("describe.continueAnalysis")}
               <ChevronRight size={18} />
             </button>
           </div>
@@ -1019,7 +984,7 @@ export default function Home() {
         {activeView === "file" && step === 3 && analysisResult && (
           <div className="space-y-4">
             <StepBackButton
-              label="Back to Describe"
+              label={t("action.backDescribe")}
               onClick={() => goToStep(1)}
             />
 
@@ -1028,7 +993,7 @@ export default function Home() {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                   <Sparkles size={16} className="text-blue-500" />
-                  AI Summary
+                  {t("ai.summary")}
                 </h3>
                 <span
                   className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -1037,7 +1002,7 @@ export default function Home() {
                       : "bg-amber-100 text-amber-700"
                   }`}
                 >
-                  {analysisResult.confidence}% confident
+                  {t("ai.confident", { n: analysisResult.confidence })}
                 </span>
               </div>
 
@@ -1048,18 +1013,18 @@ export default function Home() {
                 className="w-full px-3 py-2.5 text-sm border border-blue-200 bg-blue-50/50 rounded-lg focus:border-blue-500 focus:outline-none resize-none text-slate-800 focus:bg-white transition-colors"
               />
               <p className="text-[10px] text-slate-400 mt-1">
-                Edit to refine — routing and location detection update automatically.
+                {t("ai.editHint")}
               </p>
               {routingUpdated && (
                 <p className="text-[10px] text-green-600 mt-1 flex items-center gap-1">
                   <CheckCircle2 size={10} />
-                  Routing updated
+                  {t("ai.routingUpdated")}
                 </p>
               )}
               {isGeocoding && (
                 <p className="text-[10px] text-blue-600 mt-1 flex items-center gap-1">
                   <Loader2 size={10} className="animate-spin" />
-                  Detecting ward from your complaint…
+                  {t("ai.detectingWard")}
                 </p>
               )}
 
@@ -1105,14 +1070,14 @@ export default function Home() {
                 className="flex items-center gap-2 px-5 py-3 border-2 border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-medium transition-colors"
               >
                 <ChevronLeft size={16} />
-                Back
+                {t("action.back")}
               </button>
               <button
                 onClick={handleContinueToSummary}
                 disabled={selectedLocalDepartments.length === 0}
                 className="flex-1 bg-[#1a3c6e] hover:bg-[#2563eb] disabled:bg-slate-300 text-white font-bold py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
               >
-                Continue to Summary
+                {t("action.continueSummary")}
                 <ChevronRight size={18} />
               </button>
             </div>
@@ -1122,7 +1087,7 @@ export default function Home() {
         {/* ── STEP 4: Summary ───────────────────────────────────────── */}
         {activeView === "file" && step === 4 && analysisResult && (
           <div className="space-y-4">
-            <StepBackButton label="Back to Review" onClick={() => goToStep(3)} />
+            <StepBackButton label={t("action.backReview")} onClick={() => goToStep(3)} />
 
             <ComplaintSummaryReview
               grievanceText={grievanceText}
@@ -1148,35 +1113,13 @@ export default function Home() {
               onEditReview={() => goToStep(3)}
             />
 
-            {showSubmitVerify && (
-              <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-                <div className="w-full max-w-md">
-                  <CitizenVerifyPanel
-                    title="Verify before submitting"
-                    description="Quick mobile OTP or DigiLocker check — your identity is not shared with departments."
-                    onVerified={(session) => {
-                      handleCitizenVerified(session);
-                      void completeSubmit(session.citizenHash);
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowSubmitVerify(false)}
-                    className="mt-3 w-full text-center text-sm text-slate-500 hover:text-slate-700"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
             <div className="flex gap-3">
               <button
                 onClick={() => goToStep(3)}
                 className="flex items-center gap-2 px-5 py-3 border-2 border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-medium transition-colors"
               >
                 <ChevronLeft size={16} />
-                Back
+                {t("action.back")}
               </button>
               <button
                 onClick={handleSubmit}
@@ -1186,12 +1129,12 @@ export default function Home() {
                 {isSubmitting ? (
                   <>
                     <Loader2 size={18} className="animate-spin" />
-                    Submitting…
+                    {t("action.submitting")}
                   </>
                 ) : (
                   <>
                     <Send size={18} />
-                    Submit Official Complaint
+                    {t("action.submit")}
                   </>
                 )}
               </button>
@@ -1208,26 +1151,24 @@ export default function Home() {
                 <CheckCircle2 size={40} className="text-green-600" />
               </div>
               <h3 className="font-bold text-xl text-green-800 mb-2">
-                Complaint Submitted Successfully!
+                {t("success.title")}
               </h3>
               <p className="text-slate-500 text-sm mb-6">
-                Your grievance has been filed and routed to the appropriate department.
-                Track status anytime under <span className="font-medium text-slate-700">My Complaints</span> using the same mobile or DigiLocker verification — no reference number needed.
+                {t("success.body")}
               </p>
 
               <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-4 text-left">
                 <p className="text-xs text-blue-700 font-semibold uppercase tracking-wider mb-1">
-                  Track your complaint
+                  {t("success.trackTitle")}
                 </p>
                 <p className="text-sm text-blue-900">
-                  Open <span className="font-medium">My Complaints</span> and verify with{" "}
-                  {citizenSession?.maskedContact ?? "your mobile or DigiLocker"} to see live status updates.
+                  {t("success.trackBody")}
                 </p>
               </div>
 
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4">
                 <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">
-                  Internal reference (optional)
+                  {t("success.refOptional")}
                 </p>
                 <p className="font-mono text-sm text-slate-600">{submittedId}</p>
               </div>
@@ -1235,20 +1176,18 @@ export default function Home() {
               {/* Next steps */}
               {analysisResult && (
                 <div className="text-left space-y-2 mb-6">
-                  <p className="font-semibold text-slate-700 text-sm">What happens next:</p>
+                  <p className="font-semibold text-slate-700 text-sm">{t("success.next")}</p>
                   <div className="space-y-2">
                     <div className="flex items-start gap-3 bg-slate-50 rounded-lg px-3 py-2">
                       <span className="text-base">📩</span>
                       <span className="text-sm text-slate-600">
-                        {citizenSession?.method === "mobile"
-                          ? `SMS updates will be sent to ${citizenSession.maskedContact}`
-                          : "Status updates available in My Complaints after DigiLocker verification"}
+                        {t("success.sms")}
                       </span>
                     </div>
                     <div className="flex items-start gap-3 bg-slate-50 rounded-lg px-3 py-2">
                       <span className="text-base">🏛️</span>
                       <div className="text-sm text-slate-600">
-                        <span className="font-medium">Routed to local departments:</span>
+                        <span className="font-medium">{t("success.routedLocal")}</span>
                         <ul className="mt-1 space-y-0.5">
                           {(selectedLocalDepartments.length
                             ? selectedLocalDepartments
@@ -1267,7 +1206,7 @@ export default function Home() {
                     <div className="flex items-start gap-3 bg-slate-50 rounded-lg px-3 py-2">
                       <span className="text-base">📋</span>
                       <div className="text-sm text-slate-600">
-                        <span className="font-medium">CPGRAMS ministries notified:</span>
+                        <span className="font-medium">{t("success.routedCentral")}</span>
                         <ul className="mt-1 space-y-0.5">
                           {(selectedCpgramsCategories.length
                             ? selectedCpgramsCategories
@@ -1286,7 +1225,7 @@ export default function Home() {
                     <div className="flex items-start gap-3 bg-slate-50 rounded-lg px-3 py-2">
                       <span className="text-base">⏱️</span>
                       <span className="text-sm text-slate-600">
-                        Response expected within 48–72 hours. You will receive SMS updates on progress.
+                        {t("success.timeline")}
                       </span>
                     </div>
                   </div>
@@ -1318,7 +1257,7 @@ export default function Home() {
                   className="flex items-center gap-2 px-4 py-3 border-2 border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-medium text-sm transition-colors"
                 >
                   <Download size={14} />
-                  Download Receipt
+                  {t("success.download")}
                 </button>
                 <button
                   onClick={() => {
@@ -1328,14 +1267,14 @@ export default function Home() {
                   className="flex-1 bg-slate-100 hover:bg-slate-200 text-[#1a3c6e] font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
                 >
                   <History size={16} />
-                  View in My Complaints
+                  {t("success.viewHistory")}
                 </button>
                 <button
                   onClick={handleReset}
                   className="flex-1 bg-[#1a3c6e] hover:bg-[#2563eb] text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
                 >
                   <RotateCcw size={16} />
-                  File Another Complaint
+                  {t("success.fileAnother")}
                 </button>
               </div>
             </div>
@@ -1349,13 +1288,13 @@ export default function Home() {
         <footer className="bg-[#1a3c6e] text-white py-6 mt-4">
           <div className="max-w-5xl mx-auto px-4 text-center">
             <p className="text-blue-200 text-xs mb-1">
-              AI CPGRAMS Local · BBMP Grievance Portal · Bengaluru, Karnataka
+              {t("footer.tagline")}
             </p>
             <p className="text-blue-300/60 text-xs">
-              Grievance data is stored locally on this device with privacy-first design. Identity is verified via mobile OTP or DigiLocker without displaying your name or full number. Handled as per IT Act 2000 &amp; DPDP Act 2023.
+              {t("footer.privacy")}
             </p>
             <p className="text-blue-300/60 text-xs mt-1">
-              Civic Helpline: <span className="text-orange-300">1533</span> · BBMP: <span className="text-orange-300">080-22660000</span> · BWSSB: <span className="text-orange-300">1916</span>
+              {t("footer.helplines", { n1533: "1533", bbmp: "080-22660000", bwssb: "1916" })}
             </p>
           </div>
         </footer>
