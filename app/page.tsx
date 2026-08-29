@@ -171,7 +171,7 @@ function StepIndicator({
                     ? t("step.waitAnalysis")
                     : undefined
                 }
-                className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
                   step.num < current
                     ? "bg-green-500 text-white"
                     : step.num === current
@@ -181,10 +181,10 @@ function StepIndicator({
                     : "bg-slate-200 text-slate-400"
                 } ${navigable ? "cursor-pointer hover:scale-105 hover:shadow-md" : "cursor-default"}`}
               >
-                {step.num < current ? <CheckCircle2 size={11} /> : step.num}
+                {step.num < current ? <CheckCircle2 size={14} /> : step.num}
               </button>
               <span
-                className={`text-[9px] mt-0.5 font-medium text-center leading-tight max-w-[48px] ${
+                className={`text-xs mt-1 font-semibold text-center leading-tight max-w-[56px] ${
                   step.num === current
                     ? "text-[#1a3c6e]"
                     : navigable
@@ -197,7 +197,7 @@ function StepIndicator({
             </div>
             {i < steps.length - 1 && (
               <div
-                className={`w-5 sm:w-8 h-0.5 mb-3 mx-0.5 transition-colors ${
+                className={`w-6 sm:w-10 h-0.5 mb-4 mx-0.5 transition-colors ${
                   step.num < current ? "bg-green-400" : "bg-slate-200"
                 }`}
               />
@@ -935,7 +935,7 @@ function HomeContent() {
 
         <div className="max-w-2xl mx-auto px-4 pt-2 pb-2">
           <div className="text-center mb-2">
-            <h2 className="text-lg font-bold text-[#1a3c6e] leading-tight">
+            <h2 className="text-xl font-bold text-[#1a3c6e] leading-tight">
               {activeView === "history"
                 ? t("hero.historyTitle")
                 : activeView === "draft"
@@ -943,12 +943,12 @@ function HomeContent() {
                 : t("hero.fileTitle")}
             </h2>
             {activeView === "history" && (
-              <p className="text-slate-500 text-xs mt-0.5">
+              <p className="text-slate-600 text-sm mt-0.5">
                 {t("hero.historySubtitle")}
               </p>
             )}
             {activeView === "draft" && (
-              <p className="text-slate-500 text-xs mt-0.5">
+              <p className="text-slate-600 text-sm mt-0.5">
                 {t("hero.draftSubtitle")}
               </p>
             )}
@@ -961,25 +961,25 @@ function HomeContent() {
                 if (step === 5) handleReset();
                 setActiveView("file");
               }}
-              className={`flex-1 flex items-center justify-center gap-1 py-1 rounded-md text-[10px] font-medium transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
                 activeView === "file"
                   ? "bg-white text-[#1a3c6e] shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              <PlusCircle size={12} />
+              <PlusCircle size={14} />
               <span className="truncate">{t("tab.file")}</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveView("draft")}
-              className={`flex-1 flex items-center justify-center gap-1 py-1 rounded-md text-[10px] font-medium transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
                 activeView === "draft"
                   ? "bg-white text-[#1a3c6e] shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              <FileText size={12} />
+              <FileText size={14} />
               <span className="truncate">{t("tab.draft")}</span>
               {savedDraft && (
                 <span className="bg-amber-500 text-white text-[9px] font-bold px-1 py-0 rounded-full min-w-[14px] text-center">
@@ -990,13 +990,13 @@ function HomeContent() {
             <button
               type="button"
               onClick={() => setActiveView("history")}
-              className={`flex-1 flex items-center justify-center gap-1 py-1 rounded-md text-[10px] font-medium transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
                 activeView === "history"
                   ? "bg-white text-[#1a3c6e] shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              <History size={12} />
+              <History size={14} />
               <span className="truncate">{t("tab.history")}</span>
               {complaints.length > 0 && (
                 <span className="bg-[#1a3c6e] text-white text-[9px] font-bold px-1 py-0 rounded-full min-w-[14px] text-center">
@@ -1053,7 +1053,7 @@ function HomeContent() {
               />
             )}
             {maxStepReached >= 3 && (
-              <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700">
+              <div className="bg-blue-50 border-l-4 border-l-blue-500 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-900 font-medium">
                 {canSkipReanalysis()
                   ? t("describe.skipReanalysis")
                   : t("describe.editPrompt")}
@@ -1062,10 +1062,10 @@ function HomeContent() {
             {/* Complaint description */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="bg-slate-50 border-b border-slate-200 px-5 py-4">
-                <h3 className="font-semibold text-slate-800 text-sm">
+                <h3 className="font-bold text-slate-900 text-base">
                   {t("describe.title")}
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-sm text-slate-600 mt-1">
                   {t("describe.hint")}
                 </p>
               </div>
@@ -1113,17 +1113,21 @@ function HomeContent() {
             />
 
             {/* AI Summary first */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                  <Sparkles size={16} className="text-blue-500" />
+            <div className="bg-white rounded-2xl shadow-sm border-2 border-slate-200 overflow-hidden">
+              <div className="bg-slate-50 border-b border-slate-200 px-5 py-3">
+                <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                  <Sparkles size={18} className="text-blue-500" />
                   {t("ai.summary")}
                 </h3>
+              </div>
+              <div className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-medium text-slate-600">{t("common.yourInfo")}</p>
                 <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  className={`text-xs font-bold px-2.5 py-1 rounded-full ${
                     analysisResult.confidence >= 85
-                      ? "bg-green-100 text-green-700"
-                      : "bg-amber-100 text-amber-700"
+                      ? "bg-green-100 text-green-800 border border-green-200"
+                      : "bg-amber-100 text-amber-800 border border-amber-200"
                   }`}
                 >
                   {t("ai.confident", { n: analysisResult.confidence })}
@@ -1137,25 +1141,25 @@ function HomeContent() {
                   setEditedSummary(e.target.value);
                 }}
                 rows={3}
-                className="w-full px-3 py-2.5 text-sm border border-blue-200 bg-blue-50/50 rounded-lg focus:border-blue-500 focus:outline-none resize-none text-slate-800 focus:bg-white transition-colors"
+                className="w-full px-3 py-3 text-sm border-2 border-blue-200 bg-blue-50/50 rounded-lg focus:border-blue-500 focus:outline-none resize-none text-slate-900 focus:bg-white transition-colors"
               />
-              <p className="text-[10px] text-slate-400 mt-1">
+              <p className="text-xs text-slate-600 mt-2 bg-slate-50 border-l-4 border-l-slate-300 px-3 py-2 rounded-r-lg">
                 {t("ai.editHint")}
               </p>
               {routingUpdated && (
-                <p className="text-[10px] text-green-600 mt-1 flex items-center gap-1">
-                  <CheckCircle2 size={10} />
+                <p className="text-xs font-medium text-green-800 mt-2 flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                  <CheckCircle2 size={14} />
                   {t("ai.routingUpdated")}
                 </p>
               )}
               {isGeocoding && (
-                <p className="text-[10px] text-blue-600 mt-1 flex items-center gap-1">
-                  <Loader2 size={10} className="animate-spin" />
+                <p className="text-xs font-medium text-blue-800 mt-2 flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                  <Loader2 size={14} className="animate-spin" />
                   {t("ai.detectingWard")}
                 </p>
               )}
 
-              <div className="mt-3">
+              <div className="mt-4">
                 <RoutingPanel
                   localDepartments={selectedLocalDepartments}
                   cpgramsCategories={selectedCpgramsCategories}
@@ -1168,6 +1172,7 @@ function HomeContent() {
                   }}
                   routingUpdated={routingUpdated}
                 />
+              </div>
               </div>
             </div>
 

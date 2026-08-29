@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Sparkles } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronRight, ClipboardList, Sparkles } from "lucide-react";
 import {
   CompletenessReport,
   SupplementalDetailId,
@@ -11,6 +11,7 @@ import {
 } from "@/lib/complaintCompleteness";
 import WardAreaSelector from "@/components/WardAreaSelector";
 import { useLanguage } from "@/lib/LanguageContext";
+import { CollapsibleSectionHeader } from "@/components/CollapsibleSectionHeader";
 
 interface CompletenessCardProps {
   report: CompletenessReport;
@@ -81,54 +82,58 @@ export default function CompletenessCard({
   return (
     <div
       id="completeness-section"
-      className={`rounded-xl border overflow-hidden ${
-        score >= 100
-          ? "bg-green-50 border-green-200"
+      className={`rounded-xl overflow-hidden transition-shadow ${
+        expanded
+          ? score >= 100
+            ? "border-2 border-green-300 bg-green-50 shadow-md"
+            : score >= 70
+            ? "border-2 border-amber-300 bg-amber-50 shadow-md"
+            : "border-2 border-red-300 bg-red-50 shadow-md"
+          : score >= 100
+          ? "border-2 border-dashed border-green-300 bg-green-50/80 shadow-sm hover:border-green-400"
           : score >= 70
-          ? "bg-amber-50 border-amber-200"
-          : "bg-red-50 border-red-200"
+          ? "border-2 border-dashed border-amber-300 bg-amber-50/80 shadow-sm hover:border-amber-400"
+          : "border-2 border-dashed border-red-300 bg-red-50/80 shadow-sm hover:border-red-400"
       }`}
     >
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full px-3 py-2.5 flex items-start gap-2 text-left hover:bg-white/40 transition-colors"
+        aria-expanded={expanded}
+        className="w-full px-4 py-3.5 text-left hover:bg-white/50 transition-colors"
       >
-        <ClipboardList size={14} className="text-blue-500 mt-0.5 flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-              {t("completeness.title")}
-            </p>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <div className="text-right">
-                <div className={`text-lg font-black leading-none ${scoreColor(score)}`}>{score}%</div>
-                <div className="text-[9px] text-slate-500 uppercase tracking-wider">{t("completeness.complete")}</div>
-              </div>
-              <ChevronDown
-                size={14}
-                className={`text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`}
-              />
-            </div>
-          </div>
-          {!expanded && (
-            <div className="mt-1.5 space-y-1.5">
-              <p className="text-[11px] text-slate-600 line-clamp-2">{collapsedSummary}</p>
-              <div className="h-1.5 bg-white/70 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${barColor(score)}`}
-                  style={{ width: `${score}%` }}
-                />
+        <CollapsibleSectionHeader
+          expanded={expanded}
+          icon={<ClipboardList size={18} className="text-blue-600" />}
+          title={t("completeness.title")}
+          trailing={
+            <div className="text-right">
+              <div className={`text-xl font-black leading-none ${scoreColor(score)}`}>{score}%</div>
+              <div className="text-[10px] text-slate-600 font-semibold uppercase tracking-wide">
+                {t("completeness.complete")}
               </div>
             </div>
-          )}
-        </div>
+          }
+          subtitle={
+            !expanded ? (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-slate-700 line-clamp-2">{collapsedSummary}</p>
+                <div className="h-2 bg-white/80 rounded-full overflow-hidden border border-white">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${barColor(score)}`}
+                    style={{ width: `${score}%` }}
+                  />
+                </div>
+              </div>
+            ) : undefined
+          }
+        />
       </button>
 
       {expanded && (
         <>
-      <div className="px-5 py-3 border-t border-inherit bg-white/50">
-        <p className="text-sm text-slate-700">
+      <div className="px-5 py-3 border-t-2 border-inherit bg-white/60">
+        <p className="text-sm font-medium text-slate-800">
           {score >= 100 ? t("completeness.allDone") : t("completeness.fillHint")}
         </p>
         <div className="h-2.5 bg-white/70 rounded-full overflow-hidden mt-3">

@@ -63,9 +63,9 @@ export default function DraftPanel({ draft, onResume, onDiscard }: DraftPanelPro
       </div>
 
       <div className="px-5 py-4 border-b border-amber-100 bg-white">
-        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-          {t("draft.progress")}
-        </p>
+            <p className="text-xs font-bold text-slate-600 uppercase tracking-wide mb-2">
+              {t("draft.progress")}
+            </p>
         <div className="flex items-center justify-between gap-1">
           {STEP_ORDER.slice(0, 4).map((stepNum) => {
             const done = completedThrough >= stepNum;
@@ -89,10 +89,10 @@ export default function DraftPanel({ draft, onResume, onDiscard }: DraftPanelPro
 
       <div className="p-5 space-y-4">
         <div>
-          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
             {t("draft.complaintStep1")}
           </p>
-          <p className="text-sm text-slate-700 leading-relaxed line-clamp-4 bg-slate-50 rounded-lg p-3 border border-slate-100">
+          <p className="text-sm text-slate-800 leading-relaxed line-clamp-4 bg-white rounded-lg p-3 border-2 border-slate-200">
             {draft.grievanceText.trim() || t("draft.noPreview")}
           </p>
         </div>

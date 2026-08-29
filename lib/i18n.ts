@@ -24,6 +24,10 @@ const en = {
   "app.citizen": "Citizen",
   "app.myComplaints": "My Complaints",
 
+  "common.tapToExpand": "Tap to expand",
+  "common.tapToCollapse": "Tap to collapse",
+  "common.yourInfo": "Your information",
+
   "hero.fileTitle": "File a Civic Grievance",
   "hero.fileSubtitle": "AI-powered routing to BBMP, BWSSB & BESCOM · Bengaluru Municipal Services",
   "hero.historyTitle": "My Complaint History",

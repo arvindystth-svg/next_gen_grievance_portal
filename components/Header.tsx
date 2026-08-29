@@ -39,30 +39,30 @@ export default function Header({
       <header className={`bg-[#1a3c6e] text-white ${embedded ? "shadow-md" : "shadow-lg sticky top-0 z-50"}`}>
         <div className={`bg-[#f97316] w-full ${embedded ? "h-0.5" : "h-1"}`} />
 
-        <div className={`max-w-5xl mx-auto px-3 ${embedded ? "py-1.5" : "px-4 py-3"}`}>
+        <div className={`max-w-5xl mx-auto px-3 ${embedded ? "py-2" : "px-4 py-3"}`}>
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <div className={`flex-shrink-0 bg-white rounded-full flex items-center justify-center shadow ${embedded ? "w-7 h-7" : "w-10 h-10"}`}>
-                <span className={`text-[#1a3c6e] font-black ${embedded ? "text-xs" : "text-sm"}`}>🏛️</span>
+              <div className={`flex-shrink-0 bg-white rounded-full flex items-center justify-center shadow ${embedded ? "w-8 h-8" : "w-10 h-10"}`}>
+                <span className={`text-[#1a3c6e] font-black ${embedded ? "text-sm" : "text-base"}`}>🏛️</span>
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <h1 className={`font-bold leading-tight truncate ${embedded ? "text-sm" : "text-base"}`}>
+                  <h1 className={`font-bold leading-tight truncate ${embedded ? "text-base" : "text-lg"}`}>
                     {t("app.name")}
                   </h1>
-                  <span className={`bg-[#f97316] text-white font-bold rounded uppercase tracking-wider ${embedded ? "text-[9px] px-1.5 py-0" : "hidden sm:inline-block text-[10px] px-2 py-0.5"}`}>
+                  <span className={`bg-[#f97316] text-white font-bold rounded uppercase tracking-wider ${embedded ? "text-[10px] px-1.5 py-0" : "hidden sm:inline-block text-[11px] px-2 py-0.5"}`}>
                     {t("app.bengaluru")}
                   </span>
                 </div>
                 {!embedded && (
-                  <p className="text-blue-200 text-xs truncate">{t("app.tagline")}</p>
+                  <p className="text-blue-200 text-sm truncate">{t("app.tagline")}</p>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <div className={`flex items-center rounded-full ${embedded ? "p-1" : "gap-1.5 text-xs px-2 py-1"} ${isOnline ? "bg-green-500/20 text-green-300" : "bg-red-500/20 text-red-300"}`}>
-                {isOnline ? <Wifi size={embedded ? 11 : 12} /> : <WifiOff size={embedded ? 11 : 12} />}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className={`flex items-center rounded-full ${embedded ? "gap-1 text-xs px-2 py-1" : "gap-1.5 text-sm px-2.5 py-1"} ${isOnline ? "bg-green-500/20 text-green-300" : "bg-red-500/20 text-red-300"}`}>
+                {isOnline ? <Wifi size={embedded ? 12 : 14} /> : <WifiOff size={embedded ? 12 : 14} />}
                 {!embedded && <span className="hidden sm:inline">{isOnline ? t("app.online") : t("app.offline")}</span>}
                 {!isOnline && offlineQueueCount > 0 && (
                   <span className="bg-red-500 text-white rounded-full text-[10px] w-4 h-4 flex items-center justify-center font-bold">
@@ -74,9 +74,9 @@ export default function Header({
               <div className="relative">
                 <button
                   onClick={() => setLangOpen(!langOpen)}
-                  className={`flex items-center bg-white/10 hover:bg-white/20 rounded-lg transition-colors ${embedded ? "gap-1 px-2 py-1 text-[10px]" : "gap-1.5 text-xs px-3 py-1.5"}`}
+                  className={`flex items-center bg-white/10 hover:bg-white/20 rounded-lg transition-colors ${embedded ? "gap-1 px-2 py-1 text-xs" : "gap-1.5 text-sm px-3 py-1.5"}`}
                 >
-                  <Globe size={embedded ? 10 : 12} />
+                  <Globe size={embedded ? 12 : 14} />
                   <span className={embedded ? "max-w-[52px] truncate" : ""}>{currentLang.native}</span>
                   {!embedded && (
                     <ChevronDown size={10} className={`transition-transform ${langOpen ? "rotate-180" : ""}`} />
@@ -110,7 +110,7 @@ export default function Header({
                 title={t("app.myComplaints")}
                 aria-label={t("app.myComplaints")}
               >
-                <Bell size={embedded ? 12 : 14} />
+                <Bell size={embedded ? 13 : 15} />
                 {complaintCount > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-orange-400 text-[#1a3c6e] rounded-full text-[9px] font-bold flex items-center justify-center">
                     {complaintCount > 9 ? "9+" : complaintCount}
@@ -123,11 +123,11 @@ export default function Header({
                 className={`flex items-center bg-white/10 hover:bg-white/20 rounded-lg transition-colors ${embedded ? "p-1" : "gap-2 px-3 py-1.5"}`}
                 aria-label={t("app.privacyTitle")}
               >
-                <div className={`bg-blue-400 rounded-full flex items-center justify-center font-bold ${embedded ? "w-5 h-5 text-[10px]" : "w-6 h-6 text-xs"}`}>
+                <div className={`bg-blue-400 rounded-full flex items-center justify-center font-bold ${embedded ? "w-6 h-6 text-xs" : "w-7 h-7 text-sm"}`}>
                   {displayInitial}
                 </div>
                 {!embedded && (
-                  <span className="hidden sm:inline text-xs font-medium truncate max-w-[80px]">
+                  <span className="hidden sm:inline text-sm font-medium truncate max-w-[90px]">
                     {displayName.split(" ")[0]}
                   </span>
                 )}

@@ -24,28 +24,36 @@ export default function AdvisoryCard({
   const [expanded, setExpanded] = useState(true);
 
   return (
-    <div className="bg-amber-50 border border-amber-200 rounded-xl overflow-hidden">
-      {/* Header */}
+    <div className="bg-amber-50 border-2 border-amber-300 rounded-xl overflow-hidden shadow-sm">
       <button
+        type="button"
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-amber-100/50 transition-colors"
+        aria-expanded={expanded}
+        className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-amber-100/60 transition-colors"
       >
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-amber-400 rounded-full flex items-center justify-center flex-shrink-0">
-            <Lightbulb size={14} className="text-white" />
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-amber-400 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
+            <Lightbulb size={16} className="text-white" />
           </div>
           <div>
-            <p className="font-semibold text-amber-900 text-sm">
-              💡 Speed Up Resolution — Optional Details
+            <p className="font-bold text-amber-950 text-sm">
+              Speed Up Resolution — Optional Details
             </p>
-            <p className="text-xs text-amber-700">{observation}</p>
+            <p className="text-sm text-amber-800 mt-0.5 font-medium">{observation}</p>
           </div>
         </div>
-        {expanded ? (
-          <ChevronUp size={16} className="text-amber-600 flex-shrink-0" />
-        ) : (
-          <ChevronDown size={16} className="text-amber-600 flex-shrink-0" />
-        )}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="text-[11px] font-semibold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
+            {expanded ? "Tap to collapse" : "Tap to expand"}
+          </span>
+          <div className="w-8 h-8 rounded-full bg-white border-2 border-amber-300 flex items-center justify-center">
+            {expanded ? (
+              <ChevronUp size={18} className="text-amber-700" />
+            ) : (
+              <ChevronDown size={18} className="text-amber-700" />
+            )}
+          </div>
+        </div>
       </button>
 
       {expanded && (
