@@ -81,7 +81,6 @@ interface AnalysisResult {
   };
   confidence: number;
   keywords: string[];
-  suggested_actions: string[];
   model?: string;
 }
 
@@ -515,7 +514,7 @@ export default function Home() {
             {maxStepReached >= 3 && (
               <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700">
                 You returned to edit your complaint. Update the description or location, then tap{" "}
-                <strong>Summarize</strong> to refresh the AI analysis.
+                <strong>Continue</strong> to refresh the AI analysis.
               </div>
             )}
             {/* Complaint description */}
@@ -533,8 +532,6 @@ export default function Home() {
                   text={grievanceText}
                   onTextChange={setGrievanceText}
                   language={language}
-                  onAnalyze={handleAnalyze}
-                  isAnalyzing={isAnalyzing}
                 />
                 {analysisError && (
                   <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2 text-red-700 text-sm">
@@ -573,6 +570,16 @@ export default function Home() {
               />
             )}
 
+            <button
+              type="button"
+              onClick={handleAnalyze}
+              disabled={isAnalyzing || !grievanceText.trim() || grievanceText.trim().length < 10}
+              className="w-full bg-[#1a3c6e] hover:bg-[#2563eb] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+            >
+              <Sparkles size={18} />
+              Continue to AI Analysis
+              <ChevronRight size={18} />
+            </button>
           </div>
         )}
 
@@ -728,23 +735,6 @@ export default function Home() {
                 />
               </div>
             </div>
-
-            {/* Suggested actions */}
-            {analysisResult.suggested_actions?.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  Suggested Field Actions
-                </p>
-                <ul className="space-y-1">
-                  {analysisResult.suggested_actions.map((action, i) => (
-                    <li key={i} className="flex items-center gap-2 text-sm text-slate-700">
-                      <ChevronRight size={12} className="text-blue-400 flex-shrink-0" />
-                      {action}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
 
             {/* Advisory card */}
             {analysisResult.missing_details_advisory.is_missing && (

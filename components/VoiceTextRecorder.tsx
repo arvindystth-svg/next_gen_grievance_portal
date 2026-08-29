@@ -1,14 +1,12 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Mic, MicOff, X, Loader2, Sparkles } from "lucide-react";
+import { Mic, MicOff, X, Loader2 } from "lucide-react";
 
 interface VoiceTextRecorderProps {
   text: string;
   onTextChange: (text: string) => void;
   language: string;
-  onAnalyze?: () => void;
-  isAnalyzing?: boolean;
 }
 
 const LANGUAGE_PLACEHOLDERS: Record<string, string> = {
@@ -84,8 +82,6 @@ export default function VoiceTextRecorder({
   text,
   onTextChange,
   language,
-  onAnalyze,
-  isAnalyzing = false,
 }: VoiceTextRecorderProps) {
   const [isListening, setIsListening] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
@@ -352,8 +348,8 @@ export default function VoiceTextRecorder({
           </div>
         </div>
 
-        {/* Mic + Summarize actions beside textarea */}
-        <div className="flex flex-col items-center gap-2 pt-1 flex-shrink-0 w-[4.75rem]">
+        {/* Mic beside textarea */}
+        <div className="flex flex-col items-center gap-2 pt-1 flex-shrink-0">
           <button
             type="button"
             onClick={toggleListening}
@@ -367,25 +363,6 @@ export default function VoiceTextRecorder({
           >
             {isListening ? <MicOff size={16} /> : <Mic size={16} />}
           </button>
-
-          {onAnalyze && (
-            <button
-              type="button"
-              onClick={onAnalyze}
-              disabled={isAnalyzing || !text.trim() || isListening}
-              className="w-full flex flex-col items-center justify-center gap-0.5 bg-[#1a3c6e] hover:bg-[#2563eb] disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl py-2 px-1 transition-all focus:outline-none focus:ring-2 focus:ring-blue-200 shadow-sm"
-              title="Summarize & analyze with AI"
-            >
-              {isAnalyzing ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Sparkles size={14} />
-              )}
-              <span className="text-[9px] font-bold leading-tight text-center">
-                {isAnalyzing ? "Analyzing" : "Summarize"}
-              </span>
-            </button>
-          )}
 
           {isListening && (
             <div className="flex flex-col items-center gap-1">
@@ -402,8 +379,8 @@ export default function VoiceTextRecorder({
             </div>
           )}
 
-          {!isListening && !onAnalyze && (
-            <span className="text-[10px] text-slate-400 text-center leading-tight">
+          {!isListening && (
+            <span className="text-[10px] text-slate-400 text-center leading-tight max-w-[4rem]">
               Tap to speak
             </span>
           )}
