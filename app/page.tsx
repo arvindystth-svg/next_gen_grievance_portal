@@ -22,6 +22,13 @@ import {
   ComplaintRecord,
 } from "@/lib/complaintHistory";
 import {
+  loadComplaintDraft,
+  saveComplaintDraft,
+  clearComplaintDraft,
+  formatDraftSavedAt,
+  ComplaintDraft,
+} from "@/lib/complaintDraft";
+import {
   SEED_GRIEVANCES,
   SeedGrievance,
   GrievanceCategory,
@@ -38,6 +45,8 @@ import {
   Download,
   History,
   PlusCircle,
+  FileText,
+  X,
 } from "lucide-react";
 import { rerouteFromSummary } from "@/lib/summaryRouting";
 
@@ -241,9 +250,38 @@ export default function Home() {
   const [formSessionKey, setFormSessionKey] = useState(0);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodeFailed, setGeocodeFailed] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  const draftReadyRef = useRef(false);
+  const draftStateRef = useRef<ComplaintDraft | null>(null);
 
   useEffect(() => {
     setComplaints(getComplaintHistory());
+    const draft = loadComplaintDraft();
+    if (draft) {
+      setActiveView(draft.activeView);
+      setLanguage(draft.language);
+      setGrievanceText(draft.grievanceText);
+      setLocation(draft.location);
+      setSelectedCategory(draft.selectedCategory);
+      setAnalysisResult(draft.analysisResult);
+      setEditedSummary(draft.editedSummary);
+      setDuplicateDismissed(draft.duplicateDismissed);
+      setSelectedLocalDepartments(draft.selectedLocalDepartments);
+      setSelectedCpgramsCategories(draft.selectedCpgramsCategories);
+      setMaxStepReached(draft.maxStepReached);
+      setSelectedArea(draft.selectedArea);
+      setSupplementalDetails(draft.supplementalDetails);
+      setAutoFilledDetails(draft.autoFilledDetails);
+      setAnalysisSnapshot(draft.analysisSnapshot);
+      setGeocodeFailed(draft.geocodeFailed);
+      areaManuallySet.current = draft.areaManuallySet;
+      lastAutoRoutedSummary.current = draft.lastAutoRoutedSummary;
+      setStep(draft.step === 2 ? (draft.analysisResult ? 3 : 1) : draft.step);
+      setDraftSavedAt(draft.savedAt);
+      setDraftRestored(true);
+    }
+    draftReadyRef.current = true;
   }, []);
 
   useEffect(() => {
@@ -308,6 +346,90 @@ export default function Home() {
 
     return () => clearTimeout(timer);
   }, [editedSummary, step]);
+
+  const buildDraftSnapshot = (): ComplaintDraft => ({
+    version: 1,
+    savedAt: new Date().toISOString(),
+    activeView,
+    step: isAnalyzing ? 2 : step,
+    language,
+    grievanceText,
+    location,
+    selectedCategory,
+    analysisResult,
+    editedSummary,
+    duplicateDismissed,
+    selectedLocalDepartments,
+    selectedCpgramsCategories,
+    maxStepReached,
+    selectedArea,
+    supplementalDetails,
+    autoFilledDetails,
+    analysisSnapshot,
+    areaManuallySet: areaManuallySet.current,
+    geocodeFailed,
+    lastAutoRoutedSummary: lastAutoRoutedSummary.current,
+  });
+
+  draftStateRef.current = buildDraftSnapshot();
+
+  useEffect(() => {
+    if (!draftReadyRef.current) return;
+    if (step === 5 && submittedId) {
+      clearComplaintDraft();
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      const draft = buildDraftSnapshot();
+      saveComplaintDraft(draft);
+      setDraftSavedAt(draft.savedAt);
+    }, 400);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    activeView,
+    step,
+    language,
+    grievanceText,
+    location,
+    selectedCategory,
+    analysisResult,
+    editedSummary,
+    duplicateDismissed,
+    selectedLocalDepartments,
+    selectedCpgramsCategories,
+    maxStepReached,
+    selectedArea,
+    supplementalDetails,
+    autoFilledDetails,
+    analysisSnapshot,
+    geocodeFailed,
+    isAnalyzing,
+    submittedId,
+  ]);
+
+  useEffect(() => {
+    const flushDraft = () => {
+      if (!draftReadyRef.current || !draftStateRef.current) return;
+      if (draftStateRef.current.step === 5) {
+        clearComplaintDraft();
+        return;
+      }
+      saveComplaintDraft(draftStateRef.current);
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flushDraft();
+    };
+
+    window.addEventListener("pagehide", flushDraft);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", flushDraft);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
 
   const goToStep = (target: Step) => {
     if (submittedId && step === 5) return;
@@ -635,10 +757,16 @@ export default function Home() {
     setSubmittedId(id);
     setStep(5);
     setMaxStepReached(5);
+    clearComplaintDraft();
+    setDraftRestored(false);
+    setDraftSavedAt(null);
     setIsSubmitting(false);
   };
 
   const handleReset = () => {
+    clearComplaintDraft();
+    setDraftRestored(false);
+    setDraftSavedAt(null);
     setActiveView("file");
     setStep(1);
     setGrievanceText("");
@@ -763,6 +891,26 @@ export default function Home() {
         {/* ── FILE COMPLAINT VIEW ──────────────────────────────────── */}
         {activeView === "file" && (
         <>
+        {draftRestored && step !== 5 && (
+          <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
+            <FileText size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-900">Draft restored</p>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Your in-progress complaint was saved automatically
+                {draftSavedAt ? ` on ${formatDraftSavedAt(draftSavedAt)}` : ""}. Continue where you left off.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDraftRestored(false)}
+              className="text-amber-600 hover:text-amber-800 p-1"
+              aria-label="Dismiss draft notice"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
         {(step === 1 && !isAnalyzing) && (
           <div className="space-y-4">
             {maxStepReached >= 3 && (
