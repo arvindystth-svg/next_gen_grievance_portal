@@ -89,12 +89,17 @@ export function searchWards(query: string, limit = 12): BengaluruWard[] {
   }
 
   const tokens = q.split(/\s+/).filter(Boolean);
+  const numericQuery = /^\d{1,3}$/.test(q) ? q : null;
 
   const scored = BENGALURU_WARDS.map((ward) => {
     const haystack = wardHaystack(ward);
     const locality = ward.locality.toLowerCase();
     const name = ward.name.toLowerCase();
     let score = 0;
+
+    const wardNum = ward.name.match(/ward\s+(\d+)/i)?.[1];
+    if (numericQuery && wardNum === numericQuery) score += 200;
+    if (wardNum && (q === wardNum || q === `ward ${wardNum}`)) score += 100;
 
     if (locality === q) score += 120;
     else if (locality.startsWith(q)) score += 90;
@@ -104,9 +109,6 @@ export function searchWards(query: string, limit = 12): BengaluruWard[] {
     else if (name.includes(q)) score += 55;
 
     if (ward.zone.toLowerCase().includes(q)) score += 25;
-
-    const wardNum = ward.name.match(/ward\s+(\d+)/i)?.[1];
-    if (wardNum && (q === wardNum || q === `ward ${wardNum}`)) score += 100;
 
     for (const token of tokens) {
       if (haystack.includes(token)) score += 15;

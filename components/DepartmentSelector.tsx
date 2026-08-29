@@ -11,6 +11,7 @@ interface DepartmentSelectorProps {
   onChange: (selected: string[]) => void;
   chipClassName?: string;
   placeholder?: string;
+  compact?: boolean;
 }
 
 export default function DepartmentSelector({
@@ -21,6 +22,7 @@ export default function DepartmentSelector({
   onChange,
   chipClassName = "bg-blue-100 text-blue-700 border-blue-200",
   placeholder = "Search departments…",
+  compact = false,
 }: DepartmentSelectorProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -55,15 +57,21 @@ export default function DepartmentSelector({
 
   return (
     <div ref={containerRef} className="relative">
-      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">
+      <label
+        className={`font-semibold text-slate-500 uppercase tracking-wider block ${
+          compact ? "text-[10px] mb-1" : "text-xs mb-2"
+        }`}
+      >
         {label}
       </label>
-      {hint && <p className="text-xs text-slate-400 mb-2">{hint}</p>}
+      {hint && !compact && <p className="text-xs text-slate-400 mb-2">{hint}</p>}
 
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm border-2 border-slate-200 rounded-xl bg-white hover:border-blue-300 focus:outline-none focus:border-blue-500 transition-colors text-left min-h-[44px]"
+        className={`w-full flex items-center gap-2 text-sm border-2 border-slate-200 rounded-xl bg-white hover:border-blue-300 focus:outline-none focus:border-blue-500 transition-colors text-left ${
+          compact ? "px-2.5 py-2 min-h-[38px]" : "px-3 py-2.5 min-h-[44px]"
+        }`}
       >
         <Search size={14} className="text-slate-400 flex-shrink-0" />
         <div className="flex-1 flex flex-wrap items-center gap-1.5 min-w-0">
@@ -99,7 +107,7 @@ export default function DepartmentSelector({
       </button>
 
       {open && (
-        <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
+        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
           <div className="p-2 border-b border-slate-100">
             <input
               type="text"

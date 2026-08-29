@@ -8,8 +8,8 @@ import DuplicateBanner from "@/components/DuplicateBanner";
 import ComplaintHistory from "@/components/ComplaintHistory";
 import CompletenessCard from "@/components/CompletenessCard";
 import AnalysisLoading from "@/components/AnalysisLoading";
-import DepartmentSelector from "@/components/DepartmentSelector";
 import WardAreaSelector from "@/components/WardAreaSelector";
+import RoutingPanel from "@/components/RoutingPanel";
 import { assessComplaintCompleteness, SupplementalDetailId, SupplementalDetails, formatSupplementalForSummary } from "@/lib/complaintCompleteness";
 import { extractAreaFromText } from "@/lib/bengaluruAreas";
 import {
@@ -37,8 +37,6 @@ import {
   ChevronLeft,
   RotateCcw,
   Download,
-  FileText,
-  Tag,
   MapPin,
   History,
   PlusCircle,
@@ -760,7 +758,7 @@ export default function Home() {
 
         {/* ── STEP 3: Review & Edit ─────────────────────────────────── */}
         {activeView === "file" && step === 3 && analysisResult && (
-          <div className="space-y-5">
+          <div className="space-y-4">
             <StepBackButton
               label="Back to Describe"
               onClick={() => goToStep(1)}
@@ -778,110 +776,49 @@ export default function Home() {
               />
             )}
 
-            {/* AI Analysis header */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                  <Sparkles size={18} className="text-blue-500" />
-                  AI Analysis Complete
+            {/* AI Analysis — compact review */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                  <Sparkles size={16} className="text-blue-500" />
+                  AI Summary
                 </h3>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400">Confidence:</span>
-                  <span
-                    className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                      analysisResult.confidence >= 85
-                        ? "bg-green-100 text-green-700"
-                        : "bg-amber-100 text-amber-700"
-                    }`}
-                  >
-                    {analysisResult.confidence}%
-                  </span>
-                  {analysisResult.model && (
-                    <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
-                      {analysisResult.model}
-                    </span>
-                  )}
-                </div>
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    analysisResult.confidence >= 85
+                      ? "bg-green-100 text-green-700"
+                      : "bg-amber-100 text-amber-700"
+                  }`}
+                >
+                  {analysisResult.confidence}% confident
+                </span>
               </div>
 
-              {/* Editable summary */}
-              <div className="mb-4">
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1 mb-2">
-                  <FileText size={12} />
-                  Official Complaint Summary
-                  <span className="text-blue-500 font-normal normal-case tracking-normal ml-1">(editable)</span>
-                </label>
-                <textarea
-                  value={editedSummary}
-                  onChange={(e) => setEditedSummary(e.target.value)}
-                  rows={4}
-                  className="w-full px-4 py-3 text-sm border-2 border-blue-200 bg-blue-50 rounded-xl focus:border-blue-500 focus:outline-none resize-none text-slate-800 focus:bg-white transition-colors"
-                />
-                <p className="text-xs text-slate-400 mt-1">
-                  ✏️ Edit the summary to add more issues — classification tags update automatically
+              <textarea
+                value={editedSummary}
+                onChange={(e) => setEditedSummary(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2.5 text-sm border border-blue-200 bg-blue-50/50 rounded-lg focus:border-blue-500 focus:outline-none resize-none text-slate-800 focus:bg-white transition-colors"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                Edit to refine — routing updates automatically.
+              </p>
+              {routingUpdated && (
+                <p className="text-[10px] text-green-600 mt-1 flex items-center gap-1">
+                  <CheckCircle2 size={10} />
+                  Routing updated
                 </p>
-                {routingUpdated && (
-                  <p className="text-xs text-green-600 mt-1.5 flex items-center gap-1">
-                    <CheckCircle2 size={12} />
-                    Routing tags updated based on your edits
-                  </p>
-                )}
-              </div>
-
-              {/* Classification tags below summary */}
-              {(selectedLocalDepartments.length > 0 || selectedCpgramsCategories.length > 0) && (
-                <div className="mb-4">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                    Classification
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedLocalDepartments.map((dept) => (
-                      <span
-                        key={dept}
-                        className="text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full"
-                      >
-                        {dept}
-                      </span>
-                    ))}
-                    {selectedCpgramsCategories.map((cat) => (
-                      <span
-                        key={cat}
-                        className="text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-200 px-2.5 py-1 rounded-full"
-                      >
-                        {cat}
-                      </span>
-                    ))}
-                  </div>
-                </div>
               )}
 
-              {/* Routing — editable inline selectors */}
-              <div id="routing-section" className="space-y-4 pt-4 border-t border-slate-100">
-                <div className="flex items-center gap-1">
-                  <Tag size={12} className="text-slate-500" />
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Routing
-                  </span>
-                </div>
-
-                <DepartmentSelector
-                  label="Local Departments"
-                  hint="Departments shown above update here. Search to add or remove."
-                  selected={selectedLocalDepartments}
-                  options={LOCAL_DEPARTMENTS}
-                  onChange={handleLocalDepartmentsChange}
-                  chipClassName="bg-blue-100 text-blue-700 border-blue-200"
-                  placeholder="Search BBMP, BWSSB, BESCOM departments…"
-                />
-
-                <DepartmentSelector
-                  label="Central CPGRAMS Ministries"
-                  hint="Ministries notified on the central portal. Adjust if needed."
-                  selected={selectedCpgramsCategories}
-                  options={CPGRAMS_MINISTRIES}
-                  onChange={setSelectedCpgramsCategories}
-                  chipClassName="bg-purple-100 text-purple-700 border-purple-200"
-                  placeholder="Search CPGRAMS ministries…"
+              <div className="mt-3">
+                <RoutingPanel
+                  localDepartments={selectedLocalDepartments}
+                  cpgramsCategories={selectedCpgramsCategories}
+                  localOptions={LOCAL_DEPARTMENTS}
+                  cpgramsOptions={CPGRAMS_MINISTRIES}
+                  onLocalChange={handleLocalDepartmentsChange}
+                  onCpgramsChange={setSelectedCpgramsCategories}
+                  routingUpdated={routingUpdated}
                 />
               </div>
             </div>
@@ -889,33 +826,36 @@ export default function Home() {
             {/* Area & optional pinpoint */}
             <div
               ref={areaSectionRef}
-              className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden space-y-0"
+              className="bg-white rounded-2xl shadow-sm border border-slate-100"
             >
-              <div className="bg-slate-50 border-b border-slate-200 px-5 py-4">
+              <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 rounded-t-2xl">
                 <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
-                  <MapPin size={16} className="text-blue-500" />
+                  <MapPin size={15} className="text-blue-500" />
                   Affected Area
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Ward and locality auto-fill from your complaint. Pinning on the map is optional for area-wide issues.
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Ward auto-fills from your complaint. Map pin is optional.
                 </p>
               </div>
-              <div className="p-5 space-y-5">
+              <div className="p-4 space-y-4">
                 <WardAreaSelector
                   value={selectedArea}
                   onChange={(area) => applySelectedArea(area, true)}
                 />
 
-                <div ref={locationSectionRef}>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                    Pinpoint on Map (optional)
-                  </p>
-                  <LocationPicker
-                    location={location}
-                    onLocationChange={handleReviewLocationChange}
-                    suggestedLocation={suggestedLocation}
-                  />
-                </div>
+                <details className="group">
+                  <summary className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer list-none flex items-center gap-1">
+                    <ChevronRight size={12} className="transition-transform group-open:rotate-90" />
+                    Pin on map (optional)
+                  </summary>
+                  <div ref={locationSectionRef} className="mt-3">
+                    <LocationPicker
+                      location={location}
+                      onLocationChange={handleReviewLocationChange}
+                      suggestedLocation={suggestedLocation}
+                    />
+                  </div>
+                </details>
               </div>
             </div>
 
@@ -1112,15 +1052,6 @@ export default function Home() {
           </p>
         </div>
       </footer>
-    </div>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-slate-50 rounded-lg px-3 py-2">
-      <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{label}</div>
-      <div className="text-sm font-medium text-slate-700 mt-0.5">{value}</div>
     </div>
   );
 }
