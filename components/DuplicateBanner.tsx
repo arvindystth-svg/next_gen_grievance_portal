@@ -40,12 +40,6 @@ export default function DuplicateBanner({
     onUpvote(match.id);
   };
 
-  const urgencyColors: Record<string, string> = {
-    HIGH: "bg-red-100 text-red-700 border-red-200",
-    MEDIUM: "bg-amber-100 text-amber-700 border-amber-200",
-    LOW: "bg-green-100 text-green-700 border-green-200",
-  };
-
   return (
     <div className="bg-orange-50 border-2 border-orange-300 rounded-xl overflow-hidden shadow-sm">
       {/* Banner header */}
@@ -67,9 +61,6 @@ export default function DuplicateBanner({
         <div className="flex items-start gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${urgencyColors[match.urgency]}`}>
-                {match.urgency}
-              </span>
               <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
                 {match.category}
               </span>

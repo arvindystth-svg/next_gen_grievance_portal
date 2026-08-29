@@ -7,6 +7,12 @@ import VoiceTextRecorder from "@/components/VoiceTextRecorder";
 import AdvisoryCard from "@/components/AdvisoryCard";
 import DuplicateBanner from "@/components/DuplicateBanner";
 import ComplaintHistory from "@/components/ComplaintHistory";
+import DepartmentSelector from "@/components/DepartmentSelector";
+import {
+  LOCAL_DEPARTMENTS,
+  CPGRAMS_MINISTRIES,
+  cpgramsForLocalDepartments,
+} from "@/lib/departments";
 import {
   getComplaintHistory,
   saveComplaintToHistory,
@@ -79,12 +85,6 @@ interface AnalysisResult {
 
 type Step = 1 | 2 | 3 | 4;
 type ActiveView = "file" | "history";
-
-const URGENCY_CONFIG = {
-  HIGH: { color: "bg-red-100 text-red-700 border-red-300", dot: "bg-red-500", label: "High Priority" },
-  MEDIUM: { color: "bg-amber-100 text-amber-700 border-amber-300", dot: "bg-amber-500", label: "Medium Priority" },
-  LOW: { color: "bg-green-100 text-green-700 border-green-300", dot: "bg-green-500", label: "Low Priority" },
-};
 
 function findDuplicate(
   text: string,
@@ -175,6 +175,8 @@ export default function Home() {
     locality?: string;
   } | null>(null);
   const [complaints, setComplaints] = useState<ComplaintRecord[]>([]);
+  const [selectedLocalDepartments, setSelectedLocalDepartments] = useState<string[]>([]);
+  const [selectedCpgramsCategories, setSelectedCpgramsCategories] = useState<string[]>([]);
 
   useEffect(() => {
     setComplaints(getComplaintHistory());
@@ -234,6 +236,14 @@ export default function Home() {
       const data: AnalysisResult = await res.json();
       setAnalysisResult(data);
       setEditedSummary(data.summary);
+      const localDepts = data.local_departments?.length
+        ? data.local_departments
+        : [data.local_department];
+      const cpgramsCats = data.cpgrams_categories?.length
+        ? data.cpgrams_categories
+        : [data.cpgrams_category];
+      setSelectedLocalDepartments(localDepts);
+      setSelectedCpgramsCategories(cpgramsCats);
 
       // If AI extracted a better location, suggest it
       if (data.location.latitude && data.location.longitude && !location) {
@@ -269,7 +279,9 @@ export default function Home() {
         rawText: grievanceText,
         aiSummary: editedSummary,
         status: "Submitted",
-        localDepartments: analysisResult.local_departments?.length
+        localDepartments: selectedLocalDepartments.length
+          ? selectedLocalDepartments
+          : analysisResult.local_departments?.length
           ? analysisResult.local_departments
           : [analysisResult.local_department],
         urgency: analysisResult.urgency,
@@ -297,7 +309,20 @@ export default function Home() {
     setDuplicateDismissed(false);
     setSubmittedId(null);
     setSuggestedLocation(null);
+    setSelectedLocalDepartments([]);
+    setSelectedCpgramsCategories([]);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleLocalDepartmentsChange = (depts: string[]) => {
+    setSelectedLocalDepartments(depts);
+    if (depts.length > 0) {
+      const suggested = cpgramsForLocalDepartments(depts);
+      setSelectedCpgramsCategories((prev) => {
+        const merged = new Set([...prev, ...suggested]);
+        return Array.from(merged);
+      });
+    }
   };
 
   return (
@@ -503,56 +528,53 @@ export default function Home() {
                 </p>
               </div>
 
-              {/* Department badges */}
-              <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1 mb-2">
-                  <Tag size={12} />
-                  Classification &amp; Routing
-                </label>
-                <div className="space-y-2">
-                  <div>
-                    <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1.5">
-                      Local Departments
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {(analysisResult.local_departments?.length
-                        ? analysisResult.local_departments
-                        : [analysisResult.local_department]
-                      ).map((dept) => (
-                        <Badge key={dept} color="blue">
-                          {dept}
-                        </Badge>
-                      ))}
-                    </div>
+              {/* Extracted keywords — directly below summary */}
+              {analysisResult.keywords?.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                    Extracted Keywords
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {analysisResult.keywords.map((kw) => (
+                      <span
+                        key={kw}
+                        className="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full"
+                      >
+                        #{kw}
+                      </span>
+                    ))}
                   </div>
-                  <div>
-                    <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1.5">
-                      Central CPGRAMS Ministries
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {(analysisResult.cpgrams_categories?.length
-                        ? analysisResult.cpgrams_categories
-                        : [analysisResult.cpgrams_category]
-                      ).map((cat) => (
-                        <Badge key={cat} color="purple">
-                          {cat}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <Badge
-                    color={
-                      analysisResult.urgency === "HIGH"
-                        ? "red"
-                        : analysisResult.urgency === "MEDIUM"
-                        ? "amber"
-                        : "green"
-                    }
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${URGENCY_CONFIG[analysisResult.urgency].dot} mr-1`} />
-                    Priority: {analysisResult.urgency}
-                  </Badge>
                 </div>
+              )}
+
+              {/* Classification & routing — editable via searchable dropdown */}
+              <div className="space-y-4 pt-4 border-t border-slate-100">
+                <div className="flex items-center gap-1">
+                  <Tag size={12} className="text-slate-500" />
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Classification &amp; Routing
+                  </span>
+                </div>
+
+                <DepartmentSelector
+                  label="Local Departments"
+                  hint="AI-suggested routing. Search and select the correct department if the suggestion is wrong."
+                  selected={selectedLocalDepartments}
+                  options={LOCAL_DEPARTMENTS}
+                  onChange={handleLocalDepartmentsChange}
+                  badgeClassName="bg-blue-100 text-blue-700 border-blue-200"
+                  placeholder="Search BBMP, BWSSB, BESCOM departments…"
+                />
+
+                <DepartmentSelector
+                  label="Central CPGRAMS Ministries"
+                  hint="Ministries notified on the central portal. Adjust if needed."
+                  selected={selectedCpgramsCategories}
+                  options={CPGRAMS_MINISTRIES}
+                  onChange={setSelectedCpgramsCategories}
+                  badgeClassName="bg-purple-100 text-purple-700 border-purple-200"
+                  placeholder="Search CPGRAMS ministries…"
+                />
               </div>
             </div>
 
@@ -572,25 +594,6 @@ export default function Home() {
                 />
               </div>
             </div>
-
-            {/* Keywords */}
-            {analysisResult.keywords?.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  Extracted Keywords
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {analysisResult.keywords.map((kw) => (
-                    <span
-                      key={kw}
-                      className="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full"
-                    >
-                      #{kw}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Suggested actions */}
             {analysisResult.suggested_actions?.length > 0 && (
@@ -637,7 +640,7 @@ export default function Home() {
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={isSubmitting}
+                disabled={isSubmitting || selectedLocalDepartments.length === 0}
                 className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white font-bold py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
@@ -700,7 +703,9 @@ export default function Home() {
                       <div className="text-sm text-slate-600">
                         <span className="font-medium">Routed to local departments:</span>
                         <ul className="mt-1 space-y-0.5">
-                          {(analysisResult.local_departments?.length
+                          {(selectedLocalDepartments.length
+                            ? selectedLocalDepartments
+                            : analysisResult.local_departments?.length
                             ? analysisResult.local_departments
                             : [analysisResult.local_department]
                           ).map((dept) => (
@@ -717,7 +722,9 @@ export default function Home() {
                       <div className="text-sm text-slate-600">
                         <span className="font-medium">CPGRAMS ministries notified:</span>
                         <ul className="mt-1 space-y-0.5">
-                          {(analysisResult.cpgrams_categories?.length
+                          {(selectedCpgramsCategories.length
+                            ? selectedCpgramsCategories
+                            : analysisResult.cpgrams_categories?.length
                             ? analysisResult.cpgrams_categories
                             : [analysisResult.cpgrams_category]
                           ).map((cat) => (
@@ -732,9 +739,7 @@ export default function Home() {
                     <div className="flex items-start gap-3 bg-slate-50 rounded-lg px-3 py-2">
                       <span className="text-base">⏱️</span>
                       <span className="text-sm text-slate-600">
-                        {analysisResult.urgency === "HIGH"
-                          ? "Field crew dispatch within 24 hours (HIGH priority)"
-                          : "Response within 48-72 hours"}
+                        Response expected within 48–72 hours. You will receive SMS updates on progress.
                       </span>
                     </div>
                   </div>
@@ -744,15 +749,19 @@ export default function Home() {
               <div className="flex gap-3">
                 <button
                   onClick={() => {
-                    const depts = (analysisResult?.local_departments?.length
+                    const depts = (selectedLocalDepartments.length
+                      ? selectedLocalDepartments
+                      : analysisResult?.local_departments?.length
                       ? analysisResult.local_departments
                       : [analysisResult?.local_department]
                     ).filter(Boolean).join(", ");
-                    const cats = (analysisResult?.cpgrams_categories?.length
+                    const cats = (selectedCpgramsCategories.length
+                      ? selectedCpgramsCategories
+                      : analysisResult?.cpgrams_categories?.length
                       ? analysisResult.cpgrams_categories
                       : [analysisResult?.cpgrams_category]
                     ).filter(Boolean).join(", ");
-                    const text = `CPGRAMS Complaint: ${submittedId}\n${editedSummary}\nDepartments: ${depts}\nCPGRAMS: ${cats}\nPriority: ${analysisResult?.urgency}`;
+                    const text = `CPGRAMS Complaint: ${submittedId}\n${editedSummary}\nDepartments: ${depts}\nCPGRAMS: ${cats}`;
                     const blob = new Blob([text], { type: "text/plain" });
                     const a = document.createElement("a");
                     a.href = URL.createObjectURL(blob);
@@ -804,27 +813,6 @@ export default function Home() {
         </div>
       </footer>
     </div>
-  );
-}
-
-function Badge({
-  children,
-  color,
-}: {
-  children: React.ReactNode;
-  color: "blue" | "purple" | "red" | "amber" | "green";
-}) {
-  const colorMap = {
-    blue: "bg-blue-100 text-blue-700 border border-blue-200",
-    purple: "bg-purple-100 text-purple-700 border border-purple-200",
-    red: "bg-red-100 text-red-700 border border-red-200",
-    amber: "bg-amber-100 text-amber-700 border border-amber-200",
-    green: "bg-green-100 text-green-700 border border-green-200",
-  };
-  return (
-    <span className={`inline-flex items-center text-xs font-semibold px-3 py-1.5 rounded-full ${colorMap[color]}`}>
-      {children}
-    </span>
   );
 }
 
