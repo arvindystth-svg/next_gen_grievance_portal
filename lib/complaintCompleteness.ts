@@ -98,6 +98,7 @@ function areaConfirmed(
 
 export function assessComplaintCompleteness(params: AssessParams): CompletenessReport {
   const text = combinedText(params.grievanceText, params.editedSummary);
+  const utilityNeeded = needsUtilityId(params.selectedLocalDepartments);
   const fields: CompletenessField[] = [];
 
   fields.push({
@@ -105,7 +106,7 @@ export function assessComplaintCompleteness(params: AssessParams): CompletenessR
     label: "Issue description",
     fillHint: "Describe what is wrong, how it affects you, and any safety concerns in Step 1.",
     completed: params.grievanceText.trim().length >= 20,
-    weight: 25,
+    weight: utilityNeeded ? 25 : 28,
   });
 
   fields.push({
@@ -114,7 +115,7 @@ export function assessComplaintCompleteness(params: AssessParams): CompletenessR
     fillHint:
       "Select the affected ward/locality from the dropdown, or mention the area in your summary so it auto-fills.",
     completed: areaConfirmed(params.selectedArea, params.location),
-    weight: 25,
+    weight: utilityNeeded ? 25 : 27,
   });
 
   const landmarkFromText = hasLandmark(text);
@@ -126,7 +127,7 @@ export function assessComplaintCompleteness(params: AssessParams): CompletenessR
         ? params.aiObservation
         : "Mention the affected stretch, landmark, or neighbourhood — a pinpoint pin is optional for area-wide issues.",
     completed: landmarkFromText || params.aiMissing === false || areaConfirmed(params.selectedArea, params.location),
-    weight: 15,
+    weight: utilityNeeded ? 15 : 17,
   });
 
   fields.push({
@@ -134,7 +135,7 @@ export function assessComplaintCompleteness(params: AssessParams): CompletenessR
     label: "When the issue started",
     fillHint: "Mention how long the problem has lasted (e.g. 'for 3 days' or 'since Monday morning').",
     completed: hasTimeline(text),
-    weight: 10,
+    weight: utilityNeeded ? 10 : 11,
   });
 
   fields.push({
@@ -142,18 +143,20 @@ export function assessComplaintCompleteness(params: AssessParams): CompletenessR
     label: "Department routing",
     fillHint: "Confirm or correct the routed departments so your ticket reaches the right team.",
     completed: params.selectedLocalDepartments.length > 0,
-    weight: 15,
+    weight: utilityNeeded ? 15 : 17,
   });
 
-  const utilityNeeded = needsUtilityId(params.selectedLocalDepartments);
-  fields.push({
-    id: "consumer_id",
-    label: "Utility consumer / RR number",
-    fillHint:
-      "For water or power complaints, add your BWSSB/BESCOM consumer ID or RR number in the summary.",
-    completed: !utilityNeeded || hasConsumerId(text),
-    weight: 10,
-  });
+  // Only relevant for water / power complaints (BWSSB, BESCOM, BBMP Electrical)
+  if (utilityNeeded) {
+    fields.push({
+      id: "consumer_id",
+      label: "Utility consumer / RR number",
+      fillHint:
+        "Add your BWSSB or BESCOM consumer ID / RR number in the summary so the utility can locate your connection.",
+      completed: hasConsumerId(text),
+      weight: 10,
+    });
+  }
 
   const completed = fields.filter((f) => f.completed);
   const missing = fields.filter((f) => !f.completed);
