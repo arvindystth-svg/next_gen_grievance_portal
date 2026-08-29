@@ -28,7 +28,7 @@ export default function RootLayout({
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
-      <body className="min-h-screen bg-slate-100 text-slate-800 antialiased">
+      <body className="h-dvh overflow-hidden bg-slate-100 text-slate-800 antialiased">
         {children}
       </body>
     </html>

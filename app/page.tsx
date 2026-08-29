@@ -227,6 +227,7 @@ export default function Home() {
   const [routingUpdated, setRoutingUpdated] = useState(false);
   const lastAutoRoutedSummary = useRef<string | null>(null);
   const areaManuallySet = useRef(false);
+  const contentScrollRef = useRef<HTMLElement>(null);
   const [selectedArea, setSelectedArea] = useState<{
     ward: string;
     zone: string;
@@ -265,9 +266,13 @@ export default function Home() {
     }
   }, [grievanceText, location, selectedCategory]);
 
-  // Scroll to top when workflow step or view changes
+  const scrollContentToTop = (behavior: ScrollBehavior = "smooth") => {
+    contentScrollRef.current?.scrollTo({ top: 0, behavior });
+  };
+
+  // Scroll content to top when workflow step or view changes
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollContentToTop();
   }, [step, activeView]);
 
   // Re-route departments & keywords when citizen edits the AI summary on step 3
@@ -644,7 +649,7 @@ export default function Home() {
     setFormSessionKey((k) => k + 1);
     setGeocodeFailed(false);
     setIsGeocoding(false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollContentToTop();
   };
 
   const handleLocalDepartmentsChange = (depts: string[]) => {
@@ -654,12 +659,12 @@ export default function Home() {
   const handleContinueToSummary = () => {
     setStep(4);
     setMaxStepReached((m) => (m < 4 ? 4 : m));
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollContentToTop();
   };
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      <div className="sticky top-0 z-50">
+    <div className="h-dvh flex flex-col bg-slate-100 overflow-hidden">
+      <div className="flex-shrink-0 z-50 bg-slate-100 border-b border-slate-200/80 shadow-sm">
         <Header
           embedded
           selectedLanguage={language}
@@ -673,9 +678,55 @@ export default function Home() {
           complaintCount={complaints.length}
         />
 
-        {activeView === "file" && step !== 5 && (
-          <div className="bg-slate-100/98 backdrop-blur-md border-b border-slate-200/80 shadow-sm">
-            <div className="max-w-2xl mx-auto px-4 py-2">
+        <div className="max-w-2xl mx-auto px-4 pt-4 pb-3">
+          <div className="text-center mb-4">
+            <h2 className="text-2xl font-bold text-[#1a3c6e]">
+              {activeView === "history" ? "My Complaint History" : "File a Civic Grievance"}
+            </h2>
+            <p className="text-slate-500 text-sm mt-1">
+              {activeView === "history"
+                ? "Track status, resolutions, and rate closed complaints"
+                : "AI-powered routing to BBMP, BWSSB & BESCOM · Bengaluru Municipal Services"}
+            </p>
+          </div>
+
+          <div className="flex gap-2 mb-3 p-1 bg-slate-200/60 rounded-xl">
+            <button
+              type="button"
+              onClick={() => {
+                if (step === 5) handleReset();
+                setActiveView("file");
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                activeView === "file"
+                  ? "bg-white text-[#1a3c6e] shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <PlusCircle size={16} />
+              File Complaint
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView("history")}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                activeView === "history"
+                  ? "bg-white text-[#1a3c6e] shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <History size={16} />
+              My Complaints
+              {complaints.length > 0 && (
+                <span className="bg-[#1a3c6e] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  {complaints.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {activeView === "file" && step !== 5 && (
+            <div className="pt-1 pb-1">
               <StepIndicator
                 current={step}
                 maxReached={maxStepReached}
@@ -684,58 +735,12 @@ export default function Home() {
                 onStepClick={goToStep}
               />
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      <main className="max-w-2xl mx-auto px-4 pb-12 pt-6">
-        {/* Hero */}
-        <div className="text-center mb-6">
-          <h2 className="text-2xl font-bold text-[#1a3c6e]">
-            {activeView === "history" ? "My Complaint History" : "File a Civic Grievance"}
-          </h2>
-          <p className="text-slate-500 text-sm mt-1">
-            {activeView === "history"
-              ? "Track status, resolutions, and rate closed complaints"
-              : "AI-powered routing to BBMP, BWSSB & BESCOM · Bengaluru Municipal Services"}
-          </p>
-        </div>
-
-        {/* View tabs */}
-        <div className="flex gap-2 mb-5 p-1 bg-slate-200/60 rounded-xl">
-          <button
-            type="button"
-            onClick={() => {
-              if (step === 5) handleReset();
-              setActiveView("file");
-            }}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              activeView === "file"
-                ? "bg-white text-[#1a3c6e] shadow-sm"
-                : "text-slate-500 hover:text-slate-700"
-            }`}
-          >
-            <PlusCircle size={16} />
-            File Complaint
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveView("history")}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              activeView === "history"
-                ? "bg-white text-[#1a3c6e] shadow-sm"
-                : "text-slate-500 hover:text-slate-700"
-            }`}
-          >
-            <History size={16} />
-            My Complaints
-            {complaints.length > 0 && (
-              <span className="bg-[#1a3c6e] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                {complaints.length}
-              </span>
-            )}
-          </button>
-        </div>
+      <main ref={contentScrollRef} className="flex-1 overflow-y-auto overscroll-contain">
+        <div className="max-w-2xl mx-auto px-4 pb-12 pt-4">
 
         {/* ── HISTORY VIEW ─────────────────────────────────────────── */}
         {activeView === "history" && (
@@ -1103,22 +1108,23 @@ export default function Home() {
         )}
         </>
         )}
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-[#1a3c6e] text-white py-6 mt-4">
-        <div className="max-w-5xl mx-auto px-4 text-center">
-          <p className="text-blue-200 text-xs mb-1">
-            AI CPGRAMS Local · BBMP Grievance Portal · Bengaluru, Karnataka
-          </p>
-          <p className="text-blue-300/60 text-xs">
-            Powered by Next.js · Grievance data is end-to-end encrypted and handled as per IT Act 2000 &amp; Digital Personal Data Protection Act 2023
-          </p>
-          <p className="text-blue-300/60 text-xs mt-1">
-            Civic Helpline: <span className="text-orange-300">1533</span> · BBMP: <span className="text-orange-300">080-22660000</span> · BWSSB: <span className="text-orange-300">1916</span>
-          </p>
         </div>
-      </footer>
+
+        {/* Footer */}
+        <footer className="bg-[#1a3c6e] text-white py-6 mt-4">
+          <div className="max-w-5xl mx-auto px-4 text-center">
+            <p className="text-blue-200 text-xs mb-1">
+              AI CPGRAMS Local · BBMP Grievance Portal · Bengaluru, Karnataka
+            </p>
+            <p className="text-blue-300/60 text-xs">
+              Powered by Next.js · Grievance data is end-to-end encrypted and handled as per IT Act 2000 &amp; Digital Personal Data Protection Act 2023
+            </p>
+            <p className="text-blue-300/60 text-xs mt-1">
+              Civic Helpline: <span className="text-orange-300">1533</span> · BBMP: <span className="text-orange-300">080-22660000</span> · BWSSB: <span className="text-orange-300">1916</span>
+            </p>
+          </div>
+        </footer>
+      </main>
     </div>
   );
 }
