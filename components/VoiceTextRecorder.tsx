@@ -6,6 +6,7 @@ import { Mic, MicOff, X, Loader2 } from "lucide-react";
 interface VoiceTextRecorderProps {
   text: string;
   onTextChange: (text: string) => void;
+  onBlur?: () => void;
   language: string;
 }
 
@@ -81,6 +82,7 @@ function getSpeechRecognition(): SpeechRecognitionConstructor | null {
 export default function VoiceTextRecorder({
   text,
   onTextChange,
+  onBlur,
   language,
 }: VoiceTextRecorderProps) {
   const [isListening, setIsListening] = useState(false);
@@ -314,6 +316,7 @@ export default function VoiceTextRecorder({
           <textarea
             value={text}
             onChange={(e) => onTextChange(e.target.value)}
+            onBlur={onBlur}
             placeholder={LANGUAGE_PLACEHOLDERS[language] || LANGUAGE_PLACEHOLDERS.en}
             rows={5}
             className={`w-full px-4 py-3 text-sm border-2 rounded-xl focus:outline-none resize-none bg-white text-slate-800 placeholder-slate-400 transition-colors ${

@@ -1,13 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { X, Shield, ChevronDown, Globe, Wifi, WifiOff, Bell } from "lucide-react";
+import { X, Shield, ChevronDown, Globe, Wifi, WifiOff, Bell, LogOut } from "lucide-react";
 import { LANGUAGE_OPTIONS } from "@/lib/i18n";
 import { useLanguage } from "@/lib/LanguageContext";
+import { CitizenSession } from "@/lib/citizenAuth";
 
 interface HeaderProps {
   isOnline: boolean;
   offlineQueueCount: number;
+  citizen?: CitizenSession | null;
+  onLogout?: () => void;
   onMyComplaintsClick?: () => void;
   complaintCount?: number;
   embedded?: boolean;
@@ -16,6 +19,8 @@ interface HeaderProps {
 export default function Header({
   isOnline,
   offlineQueueCount,
+  citizen,
+  onLogout,
   onMyComplaintsClick,
   complaintCount = 0,
   embedded = false,
@@ -25,6 +30,9 @@ export default function Header({
   const [langOpen, setLangOpen] = useState(false);
 
   const currentLang = LANGUAGE_OPTIONS.find((l) => l.code === language) || LANGUAGE_OPTIONS[0];
+
+  const displayName = citizen?.name ?? t("app.citizen");
+  const displayInitial = displayName.charAt(0);
 
   return (
     <>
@@ -116,11 +124,11 @@ export default function Header({
                 aria-label={t("app.privacyTitle")}
               >
                 <div className={`bg-blue-400 rounded-full flex items-center justify-center font-bold ${embedded ? "w-5 h-5 text-[10px]" : "w-6 h-6 text-xs"}`}>
-                  {t("app.citizen").charAt(0)}
+                  {displayInitial}
                 </div>
                 {!embedded && (
                   <span className="hidden sm:inline text-xs font-medium truncate max-w-[80px]">
-                    {t("app.citizen")}
+                    {displayName.split(" ")[0]}
                   </span>
                 )}
               </button>
@@ -159,11 +167,13 @@ export default function Header({
               </div>
               <div className="flex items-center gap-4">
                 <div className="w-16 h-16 bg-blue-400 rounded-full flex items-center justify-center text-2xl font-bold shadow-lg">
-                  {t("app.citizen").charAt(0)}
+                  {displayInitial}
                 </div>
                 <div>
-                  <h2 className="font-bold text-lg">{t("app.citizen")}</h2>
-                  <p className="text-blue-200 text-sm">{t("app.bengaluru")}</p>
+                  <h2 className="font-bold text-lg">{displayName}</h2>
+                  <p className="text-blue-200 text-sm">
+                    {citizen ? `+91 ${citizen.maskedMobile}` : t("app.bengaluru")}
+                  </p>
                 </div>
               </div>
             </div>
@@ -174,7 +184,19 @@ export default function Header({
               </div>
             </div>
 
-            <div className="p-4 border-t border-slate-100">
+            <div className="p-4 border-t border-slate-100 space-y-2">
+              {onLogout && (
+                <button
+                  onClick={() => {
+                    setDrawerOpen(false);
+                    onLogout();
+                  }}
+                  className="w-full border-2 border-slate-200 text-slate-600 py-2.5 rounded-xl font-medium hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <LogOut size={16} />
+                  Log out
+                </button>
+              )}
               <button
                 onClick={() => setDrawerOpen(false)}
                 className="w-full bg-[#1a3c6e] text-white py-2.5 rounded-xl font-medium hover:bg-[#2563eb] transition-colors"

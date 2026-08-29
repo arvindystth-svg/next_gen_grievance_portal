@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import VoiceTextRecorder from "@/components/VoiceTextRecorder";
 import DuplicateBanner from "@/components/DuplicateBanner";
@@ -27,9 +28,16 @@ import {
   saveComplaintDraft,
   clearComplaintDraft,
   ComplaintDraft,
+  resumeStepFromDraft,
+  isDraftMeaningful,
 } from "@/lib/complaintDraft";
 import { LanguageProvider, useLanguage } from "@/lib/LanguageContext";
 import { isLanguageCode } from "@/lib/i18n";
+import {
+  CitizenSession,
+  loadCitizenSession,
+  clearCitizenSession,
+} from "@/lib/citizenAuth";
 import {
   SEED_GRIEVANCES,
   SeedGrievance,
@@ -223,7 +231,10 @@ export default function Home() {
 }
 
 function HomeContent() {
+  const router = useRouter();
   const { language, setLanguage, t } = useLanguage();
+  const [citizen, setCitizen] = useState<CitizenSession | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>("file");
   const [step, setStep] = useState<Step>(1);
   const [grievanceText, setGrievanceText] = useState("");
@@ -264,33 +275,51 @@ function HomeContent() {
   const draftReadyRef = useRef(false);
   const draftStateRef = useRef<ComplaintDraft | null>(null);
   const sessionActiveRef = useRef(false);
+  const ownerId = citizen?.mobile ?? "";
 
-  const refreshSavedDraft = () => {
-    setSavedDraft(loadComplaintDraft());
-  };
+  const refreshSavedDraft = useCallback(() => {
+    if (!ownerId) {
+      setSavedDraft(null);
+      return;
+    }
+    setSavedDraft(loadComplaintDraft(ownerId));
+  }, [ownerId]);
+
+  const persistDraftNow = useCallback(
+    (snapshot?: ComplaintDraft) => {
+      if (!ownerId) return;
+      const draft = snapshot ?? draftStateRef.current;
+      if (!draft || !isDraftMeaningful(draft)) return;
+      if (saveComplaintDraft(draft, ownerId)) {
+        setSavedDraft({ ...draft, savedAt: new Date().toISOString() });
+      }
+    },
+    [ownerId]
+  );
 
   const applyDraft = (draft: ComplaintDraft) => {
     if (isLanguageCode(draft.language)) setLanguage(draft.language);
-    setGrievanceText(draft.grievanceText);
+    setGrievanceText(draft.grievanceText ?? "");
     setLocation(draft.location);
     setSelectedCategory(draft.selectedCategory);
     setAnalysisResult(draft.analysisResult);
-    setEditedSummary(draft.editedSummary);
+    setEditedSummary(draft.editedSummary ?? "");
     setDuplicateDismissed(draft.duplicateDismissed);
-    setSelectedLocalDepartments(draft.selectedLocalDepartments);
-    setSelectedCpgramsCategories(draft.selectedCpgramsCategories);
-    setMaxStepReached(draft.maxStepReached);
+    setSelectedLocalDepartments(draft.selectedLocalDepartments ?? []);
+    setSelectedCpgramsCategories(draft.selectedCpgramsCategories ?? []);
+    setMaxStepReached(draft.maxStepReached ?? draft.step ?? 1);
     setSelectedArea(draft.selectedArea);
-    setSupplementalDetails(draft.supplementalDetails);
-    setAutoFilledDetails(draft.autoFilledDetails);
+    setSupplementalDetails(draft.supplementalDetails ?? {});
+    setAutoFilledDetails(draft.autoFilledDetails ?? {});
     setAnalysisSnapshot(draft.analysisSnapshot);
     setGeocodeFailed(draft.geocodeFailed);
     areaManuallySet.current = draft.areaManuallySet;
     lastAutoRoutedSummary.current = draft.lastAutoRoutedSummary;
-    setStep(draft.step === 2 ? (draft.analysisResult ? 3 : 1) : draft.step);
+    setStep(resumeStepFromDraft(draft));
     setIsAnalyzing(false);
     setAnalysisError(null);
     setSubmittedId(null);
+    setFormSessionKey((k) => k + 1);
   };
 
   const resetFormState = () => {
@@ -338,16 +367,33 @@ function HomeContent() {
   };
 
   const handleDiscardDraft = () => {
-    clearComplaintDraft();
+    if (ownerId) clearComplaintDraft(ownerId);
     setSavedDraft(null);
     resetFormState();
   };
 
+  const handleLogout = () => {
+    clearCitizenSession();
+    setCitizen(null);
+    router.replace("/login");
+  };
+
   useEffect(() => {
+    const session = loadCitizenSession();
+    if (!session) {
+      router.replace("/login");
+      return;
+    }
+    setCitizen(session);
+    setAuthReady(true);
+  }, [router]);
+
+  useEffect(() => {
+    if (!authReady || !ownerId) return;
     setComplaints(getComplaintHistory());
     refreshSavedDraft();
     draftReadyRef.current = true;
-  }, []);
+  }, [authReady, ownerId, refreshSavedDraft]);
 
   useEffect(() => {
     const update = () => setIsOnline(navigator.onLine);
@@ -415,8 +461,10 @@ function HomeContent() {
   const buildDraftSnapshot = (): ComplaintDraft => ({
     version: 1,
     savedAt: new Date().toISOString(),
+    ownerId,
     activeView,
     step: isAnalyzing ? 2 : step,
+    maxStepReached,
     language,
     grievanceText,
     location,
@@ -426,7 +474,6 @@ function HomeContent() {
     duplicateDismissed,
     selectedLocalDepartments,
     selectedCpgramsCategories,
-    maxStepReached,
     selectedArea,
     supplementalDetails,
     autoFilledDetails,
@@ -439,18 +486,20 @@ function HomeContent() {
   draftStateRef.current = buildDraftSnapshot();
 
   useEffect(() => {
-    if (!draftReadyRef.current || !sessionActiveRef.current) return;
+    if (!draftReadyRef.current || !ownerId) return;
     if (step === 5 && submittedId) {
-      clearComplaintDraft();
+      clearComplaintDraft(ownerId);
       setSavedDraft(null);
       return;
     }
 
     const timer = window.setTimeout(() => {
       const draft = buildDraftSnapshot();
-      saveComplaintDraft(draft);
-      setSavedDraft(draft);
-    }, 400);
+      if (!sessionActiveRef.current && !isDraftMeaningful(draft)) return;
+      if (saveComplaintDraft(draft, ownerId)) {
+        setSavedDraft(draft);
+      }
+    }, 300);
 
     return () => window.clearTimeout(timer);
   }, [
@@ -473,16 +522,24 @@ function HomeContent() {
     geocodeFailed,
     isAnalyzing,
     submittedId,
+    ownerId,
   ]);
 
   useEffect(() => {
+    if (!draftReadyRef.current || !sessionActiveRef.current || !ownerId) return;
+    persistDraftNow();
+  }, [step, maxStepReached, ownerId, persistDraftNow]);
+
+  useEffect(() => {
     const flushDraft = () => {
-      if (!draftReadyRef.current || !sessionActiveRef.current || !draftStateRef.current) return;
-      if (draftStateRef.current.step === 5) {
-        clearComplaintDraft();
+      if (!draftReadyRef.current || !draftStateRef.current || !ownerId) return;
+      if (draftStateRef.current.step === 5 || draftStateRef.current.maxStepReached === 5) {
+        clearComplaintDraft(ownerId);
         return;
       }
-      saveComplaintDraft(draftStateRef.current);
+      if (isDraftMeaningful(draftStateRef.current)) {
+        saveComplaintDraft(draftStateRef.current, ownerId);
+      }
     };
 
     const onVisibilityChange = () => {
@@ -826,13 +883,13 @@ function HomeContent() {
     setSubmittedId(id);
     setStep(5);
     setMaxStepReached(5);
-    clearComplaintDraft();
+    if (ownerId) clearComplaintDraft(ownerId);
     setSavedDraft(null);
     setIsSubmitting(false);
   };
 
   const handleReset = () => {
-    clearComplaintDraft();
+    if (ownerId) clearComplaintDraft(ownerId);
     setSavedDraft(null);
     resetFormState();
     setActiveView("file");
@@ -851,6 +908,14 @@ function HomeContent() {
     scrollContentToTop();
   };
 
+  if (!authReady || !citizen) {
+    return (
+      <div className="h-dvh flex items-center justify-center bg-slate-100">
+        <Loader2 className="animate-spin text-[#1a3c6e]" size={28} />
+      </div>
+    );
+  }
+
   return (
     <div className="h-dvh flex flex-col bg-slate-100 overflow-hidden">
       <div className="flex-shrink-0 z-50 bg-slate-100 border-b border-slate-200/80 shadow-sm">
@@ -858,6 +923,8 @@ function HomeContent() {
           embedded
           isOnline={isOnline}
           offlineQueueCount={offlineQueueCount}
+          citizen={citizen}
+          onLogout={handleLogout}
           onMyComplaintsClick={() => {
             if (step === 5 && submittedId) handleReset();
             setActiveView("history");
@@ -1005,6 +1072,10 @@ function HomeContent() {
                   key={formSessionKey}
                   text={grievanceText}
                   onTextChange={handleGrievanceTextChange}
+                  onBlur={() => {
+                    markSessionActive();
+                    persistDraftNow();
+                  }}
                   language={language}
                 />
                 {analysisError && (

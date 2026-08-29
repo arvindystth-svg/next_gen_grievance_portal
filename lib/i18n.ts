@@ -66,6 +66,9 @@ const en = {
   "draft.noPreview": "No description entered yet",
   "draft.resume": "Resume draft",
   "draft.discard": "Discard",
+  "draft.progress": "Steps completed",
+  "draft.complaintStep1": "Your complaint (Step 1)",
+  "draft.aiSummary": "AI summary",
 
   "ai.summary": "AI Summary",
   "ai.confident": "{n}% confident",

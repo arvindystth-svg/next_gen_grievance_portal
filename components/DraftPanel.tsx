@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, FileText, Play, Trash2, MapPin, Building2 } from "lucide-react";
+import { Clock, FileText, Play, Trash2, MapPin, Building2, CheckCircle2 } from "lucide-react";
 import { useLanguage } from "@/lib/LanguageContext";
 import { ComplaintDraft, DraftStep, formatDraftSavedAt } from "@/lib/complaintDraft";
 import { TranslationKey } from "@/lib/i18n";
@@ -22,6 +22,8 @@ function stepTranslationKey(step: DraftStep): TranslationKey {
   return map[step];
 }
 
+const STEP_ORDER: DraftStep[] = [1, 2, 3, 4, 5];
+
 export default function DraftPanel({ draft, onResume, onDiscard }: DraftPanelProps) {
   const { t } = useLanguage();
 
@@ -36,11 +38,9 @@ export default function DraftPanel({ draft, onResume, onDiscard }: DraftPanelPro
     );
   }
 
-  const preview =
-    draft.grievanceText.trim() ||
-    draft.editedSummary.trim() ||
-    t("draft.noPreview");
-  const displayStep: DraftStep = draft.step === 2 && draft.analysisResult ? 3 : draft.step;
+  const completedThrough = draft.maxStepReached ?? draft.step;
+  const resumeStep: DraftStep =
+    draft.step === 2 && draft.analysisResult ? 3 : Math.min(completedThrough, 4) as DraftStep;
 
   return (
     <div className="bg-white border border-amber-200 rounded-2xl overflow-hidden shadow-sm">
@@ -56,19 +56,55 @@ export default function DraftPanel({ draft, onResume, onDiscard }: DraftPanelPro
               {t("draft.savedAt", { date: formatDraftSavedAt(draft.savedAt) })}
             </p>
             <p className="text-xs text-amber-700 mt-1">
-              {t("draft.step", { step: t(stepTranslationKey(displayStep)) })}
+              {t("draft.step", { step: t(stepTranslationKey(resumeStep)) })}
             </p>
           </div>
+        </div>
+      </div>
+
+      <div className="px-5 py-4 border-b border-amber-100 bg-white">
+        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+          {t("draft.progress")}
+        </p>
+        <div className="flex items-center justify-between gap-1">
+          {STEP_ORDER.slice(0, 4).map((stepNum) => {
+            const done = completedThrough >= stepNum;
+            return (
+              <div key={stepNum} className="flex-1 flex flex-col items-center gap-1">
+                <div
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    done ? "bg-green-500 text-white" : "bg-slate-200 text-slate-500"
+                  }`}
+                >
+                  {done ? <CheckCircle2 size={12} /> : stepNum}
+                </div>
+                <span className={`text-[9px] text-center leading-tight ${done ? "text-green-700 font-medium" : "text-slate-400"}`}>
+                  {t(stepTranslationKey(stepNum))}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
       <div className="p-5 space-y-4">
         <div>
           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-            {t("draft.preview")}
+            {t("draft.complaintStep1")}
           </p>
-          <p className="text-sm text-slate-700 leading-relaxed line-clamp-4">{preview}</p>
+          <p className="text-sm text-slate-700 leading-relaxed line-clamp-4 bg-slate-50 rounded-lg p-3 border border-slate-100">
+            {draft.grievanceText.trim() || t("draft.noPreview")}
+          </p>
         </div>
+
+        {draft.editedSummary.trim() && completedThrough >= 3 && (
+          <div>
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+              {t("draft.aiSummary")}
+            </p>
+            <p className="text-sm text-slate-600 leading-relaxed line-clamp-3">{draft.editedSummary}</p>
+          </div>
+        )}
 
         {(draft.selectedArea || draft.selectedLocalDepartments.length > 0) && (
           <div className="flex flex-wrap gap-3 text-xs text-slate-600">

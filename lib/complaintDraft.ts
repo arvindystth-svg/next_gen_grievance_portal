@@ -1,7 +1,7 @@
 import { SupplementalDetailId, SupplementalDetails } from "@/lib/complaintCompleteness";
 import { GrievanceCategory } from "@/lib/seedData";
 
-const STORAGE_KEY = "cpgrams_complaint_draft_v1";
+const STORAGE_PREFIX = "cpgrams_complaint_draft_v1";
 const DRAFT_VERSION = 1;
 
 export type DraftStep = 1 | 2 | 3 | 4 | 5;
@@ -42,8 +42,12 @@ export interface DraftAnalysisResult {
 export interface ComplaintDraft {
   version: typeof DRAFT_VERSION;
   savedAt: string;
+  ownerId: string;
   activeView: "file" | "draft" | "history";
+  /** Current visible step in the workflow */
   step: DraftStep;
+  /** Furthest step the citizen has completed */
+  maxStepReached: DraftStep;
   language: string;
   grievanceText: string;
   location: DraftLocation | null;
@@ -53,7 +57,6 @@ export interface ComplaintDraft {
   duplicateDismissed: boolean;
   selectedLocalDepartments: string[];
   selectedCpgramsCategories: string[];
-  maxStepReached: DraftStep;
   selectedArea: { ward: string; zone: string; locality: string } | null;
   supplementalDetails: SupplementalDetails;
   autoFilledDetails: Partial<Record<SupplementalDetailId, boolean>>;
@@ -63,45 +66,68 @@ export interface ComplaintDraft {
   lastAutoRoutedSummary: string | null;
 }
 
+export function draftStorageKey(ownerId: string): string {
+  return `${STORAGE_PREFIX}_${ownerId}`;
+}
+
 export function isDraftMeaningful(draft: ComplaintDraft): boolean {
   return (
     draft.grievanceText.trim().length > 0 ||
+    draft.maxStepReached > 1 ||
     draft.step > 1 ||
     Boolean(draft.analysisResult) ||
     draft.editedSummary.trim().length > 0
   );
 }
 
-export function loadComplaintDraft(): ComplaintDraft | null {
-  if (typeof window === "undefined") return null;
+export function resumeStepFromDraft(draft: ComplaintDraft): DraftStep {
+  const target = Math.max(draft.step, draft.maxStepReached) as DraftStep;
+  if (target === 2) return draft.analysisResult ? 3 : 1;
+  if (target >= 5) return 4;
+  return target;
+}
+
+export function loadComplaintDraft(ownerId: string): ComplaintDraft | null {
+  if (typeof window === "undefined" || !ownerId) return null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(draftStorageKey(ownerId));
     if (!raw) return null;
     const draft = JSON.parse(raw) as ComplaintDraft;
     if (draft.version !== DRAFT_VERSION) return null;
-    if (draft.step === 5) return null;
+    if (draft.step === 5 || draft.maxStepReached === 5) return null;
     if (!isDraftMeaningful(draft)) return null;
-    return draft;
+    return {
+      ...draft,
+      grievanceText: draft.grievanceText ?? "",
+      maxStepReached: draft.maxStepReached ?? draft.step ?? 1,
+    };
   } catch {
     return null;
   }
 }
 
-export function saveComplaintDraft(draft: ComplaintDraft): void {
-  if (typeof window === "undefined") return;
-  if (!isDraftMeaningful(draft) || draft.step === 5) {
-    localStorage.removeItem(STORAGE_KEY);
-    return;
+export function saveComplaintDraft(draft: ComplaintDraft, ownerId: string): boolean {
+  if (typeof window === "undefined" || !ownerId) return false;
+  if (!isDraftMeaningful(draft) || draft.step === 5 || draft.maxStepReached === 5) {
+    return false;
   }
   localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({ ...draft, version: DRAFT_VERSION, savedAt: new Date().toISOString() })
+    draftStorageKey(ownerId),
+    JSON.stringify({
+      ...draft,
+      ownerId,
+      version: DRAFT_VERSION,
+      savedAt: new Date().toISOString(),
+      grievanceText: draft.grievanceText ?? "",
+      maxStepReached: draft.maxStepReached ?? draft.step,
+    })
   );
+  return true;
 }
 
-export function clearComplaintDraft(): void {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(STORAGE_KEY);
+export function clearComplaintDraft(ownerId: string): void {
+  if (typeof window === "undefined" || !ownerId) return;
+  localStorage.removeItem(draftStorageKey(ownerId));
 }
 
 export function formatDraftSavedAt(iso: string): string {
