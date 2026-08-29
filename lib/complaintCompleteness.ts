@@ -42,6 +42,7 @@ export const DETAIL_INPUT_CONFIG: Record<
   landmark: {
     label: "Area or landmark",
     placeholder: "e.g. Near metro station, 10th Main Road, opposite temple",
+    multiline: true,
   },
   timeline: {
     label: "When it started",
@@ -80,18 +81,110 @@ interface AssessParams {
   wardAutoFillFailed?: boolean;
 }
 
-const LANDMARK_PATTERNS = [
-  /\b(near|opposite|behind|beside|next to|adjacent)\b/i,
-  /\b(bus stand|metro|hospital|school|temple|mall|junction|circle|chowk)\b/i,
-  /\b\d+(st|nd|rd|th)\s+(main|cross|block|stage)\b/i,
-  /\bmain\s+road\b/i,
-  /\bstreet\s*(no\.?|number)?\s*\d+/i,
-  /\bplot\s*(no\.?|#)?\s*\d+/i,
-  /\b(area|stretch|locality|neighbourhood|neighborhood)\b/i,
-];
+/** Vague location phrases that should not count as landmarks. */
+const VAGUE_NEAR_TARGET =
+  /^(?:a|an|the)\s+(?:local\s+)?(?:\w+\s+){0,3}(?:park|road|area|spot|place|gate|corner|stretch|building|house|shop|tree|dump|bin)(?:\s+gate)?\b/i;
+
+function trimLandmarkCandidate(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ").replace(/^[,.\s;:]+|[,.\s;:]+$/g, "");
+}
+
+function isSpecificLandmarkPhrase(phrase: string): boolean {
+  const trimmed = trimLandmarkCandidate(phrase);
+  if (trimmed.length < 4 || trimmed.length > 200 || isGibberish(trimmed)) return false;
+
+  if (extractAreaFromText(trimmed)) return true;
+  if (/\b\d+(?:st|nd|rd|th)\s+(?:main|cross|block|stage)\b/i.test(trimmed)) return true;
+  if (/\b(?:plot|street|house|building)\s*(?:no\.?|number|#)?\s*\d+/i.test(trimmed)) return true;
+
+  if (
+    /\b[A-Z][\w]*(?:\s+[A-Z][\w]*)*\s*(?:Hospital|Metro(?:\s+Station)?|Bus\s+Stand|Mall|Temple|School|College|University|Layout|Nagar|Circle|Chowk|Market|Stadium)\b/.test(
+      trimmed
+    )
+  ) {
+    return true;
+  }
+
+  const nearMatch = trimmed.match(
+    /^(?:near|opposite|behind|beside|next to|adjacent to)\s+(?:the\s+)?(.+)$/i
+  );
+  if (nearMatch) {
+    const target = nearMatch[1].trim();
+    if (target.length < 3 || VAGUE_NEAR_TARGET.test(target)) return false;
+    if (extractAreaFromText(target)) return true;
+    if (
+      /\b[A-Z]/.test(target) &&
+      /\b(hospital|metro|school|temple|mall|junction|bus stand|college|layout|nagar|market|station)\b/i.test(
+        target
+      )
+    ) {
+      return true;
+    }
+    if (/\b\d+(?:st|nd|rd|th)\s+(?:main|cross)/i.test(target)) return true;
+    return false;
+  }
+
+  if (/\b(bus stand|metro station|hospital|school|temple|mall|junction|circle|chowk)\b/i.test(trimmed)) {
+    return !/\blocal\s+(?:park|road|area)\b/i.test(trimmed);
+  }
+
+  return false;
+}
+
+function isAcceptableManualLandmark(value: string): boolean {
+  if (isSpecificLandmarkPhrase(value)) return true;
+  const trimmed = trimLandmarkCandidate(value);
+  if (trimmed.length < 6 || isGibberish(trimmed)) return false;
+  if (VAGUE_NEAR_TARGET.test(trimmed)) return false;
+  if (extractAreaFromText(trimmed)) return true;
+  if (/\b\d+(?:st|nd|rd|th)\s+(?:main|cross|block)\b/i.test(trimmed)) return true;
+  if (/\b(?:plot|street|house|building)\s*(?:no\.?|#)?\s*\d+/i.test(trimmed)) return true;
+  return trimmed.split(/\s+/).filter((w) => w.length > 2).length >= 3;
+}
+
+function extractLandmarkFromText(text: string): string | null {
+  const candidates: string[] = [];
+
+  const namedFacility =
+    /\b([A-Z][\w]*(?:\s+[A-Z][\w]*){0,5}\s*(?:Hospital|Metro(?:\s+Station)?|Bus\s+Stand|Mall|Temple|School|College|University|Layout|Nagar|Circle|Chowk|Market|Stadium)(?:\s+Gate)?)\b/g;
+  let match: RegExpExecArray | null;
+  while ((match = namedFacility.exec(text)) !== null) {
+    candidates.push(trimLandmarkCandidate(match[1]));
+  }
+
+  const roads = /\b(\d+(?:st|nd|rd|th)\s+(?:Main|Cross|Block|Stage)(?:\s+Road)?)\b/gi;
+  while ((match = roads.exec(text)) !== null) {
+    candidates.push(trimLandmarkCandidate(match[1]));
+  }
+
+  const addressNums =
+    /\b((?:plot|street|house|building)\s*(?:no\.?|number|#)?\s*\d+[\w\s,-]{0,30})/gi;
+  while ((match = addressNums.exec(text)) !== null) {
+    candidates.push(trimLandmarkCandidate(match[1]));
+  }
+
+  const nearPhrase =
+    /\b((?:near|opposite|behind|beside|next to|adjacent to)\s+(?:the\s+)?[^.,!?;\n]{3,120})/gi;
+  while ((match = nearPhrase.exec(text)) !== null) {
+    candidates.push(trimLandmarkCandidate(match[1]));
+  }
+
+  const area = extractAreaFromText(text);
+  if (area) {
+    candidates.push(`${area.locality} · ${area.ward}`);
+  }
+
+  for (const candidate of candidates) {
+    if (isSpecificLandmarkPhrase(candidate)) {
+      return candidate.slice(0, 200);
+    }
+  }
+
+  return null;
+}
 
 const TIMELINE_PATTERNS = [
-  /\b(since|for|past|last)\s+\d+\s+(day|week|month|hour)/i,
+  /\b(since|for|past|last)\s+\d+\s+(days?|weeks?|months?|hours?)\b/i,
   /\b\d+\s+(days?|weeks?|months?|hours?)\s+(ago|back)/i,
   /\b\d+\s+(days?|weeks?|months?)\b/i,
   /\b(yesterday|today|this\s+morning|last\s+night)\b/i,
@@ -101,7 +194,7 @@ const TIMELINE_PATTERNS = [
   /\b(week|month)\s+ago\b/i,
   /\brecent(ly)?\b/i,
   /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
-  /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\b/i,
+  /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\b/i,
 ];
 
 const CONSUMER_ID_PATTERNS = [
@@ -180,9 +273,7 @@ function supplementalIsValid(id: SupplementalDetailId, supplemental?: Supplement
       );
     case "landmark": {
       if (val.length < 4 || isGibberish(val)) return false;
-      if (LANDMARK_PATTERNS.some((p) => p.test(val))) return true;
-      if (extractAreaFromText(val)) return true;
-      return val.split(/\s+/).filter((w) => w.length > 2).length >= 1;
+      return isAcceptableManualLandmark(val);
     }
     case "timeline":
       if (val.length < 3 || isGibberish(val)) return false;
@@ -216,8 +307,9 @@ export function validateSupplementalDetail(
 }
 
 function hasLandmark(text: string, supplemental?: SupplementalDetails): boolean {
-  if (supplementalIsValid("landmark", supplemental)) return true;
-  return LANDMARK_PATTERNS.some((p) => p.test(text));
+  const manual = supplemental?.landmark?.trim();
+  if (manual && isAcceptableManualLandmark(manual)) return true;
+  return extractLandmarkFromText(text) !== null;
 }
 
 function hasTimeline(text: string, supplemental?: SupplementalDetails): boolean {
@@ -367,19 +459,10 @@ export function extractAutoFillSupplemental(
     }
   }
 
-  for (const pattern of LANDMARK_PATTERNS) {
-    const match = text.match(pattern);
-    if (match) {
-      const idx = match.index ?? 0;
-      const start = Math.max(0, idx - 30);
-      const end = Math.min(text.length, idx + match[0].length + 40);
-      const snippet = text.slice(start, end).trim().replace(/^[,.\s]+|[,.\s]+$/g, "");
-      if (snippet.length >= 4 && supplementalIsValid("landmark", { landmark: snippet })) {
-        details.landmark = snippet;
-        autoFilled.landmark = true;
-        break;
-      }
-    }
+  const landmark = extractLandmarkFromText(text);
+  if (landmark) {
+    details.landmark = landmark;
+    autoFilled.landmark = true;
   }
 
   for (const pattern of CONSUMER_ID_PATTERNS) {

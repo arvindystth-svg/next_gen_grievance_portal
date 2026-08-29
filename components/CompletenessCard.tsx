@@ -158,7 +158,7 @@ export default function CompletenessCard({
                         onChange={(e) => onDetailChange(detailId, e.target.value)}
                         onBlur={(e) => onDetailBlur?.(detailId, e.target.value)}
                         placeholder={config.placeholder}
-                        rows={2}
+                        rows={detailId === "landmark" ? 3 : 2}
                         autoComplete="off"
                         name={`supplemental-${detailId}`}
                         className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 resize-none text-slate-800 ${
