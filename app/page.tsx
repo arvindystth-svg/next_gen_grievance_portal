@@ -9,6 +9,7 @@ import CompletenessCard from "@/components/CompletenessCard";
 import AnalysisLoading from "@/components/AnalysisLoading";
 import RoutingPanel from "@/components/RoutingPanel";
 import ComplaintSummaryReview from "@/components/ComplaintSummaryReview";
+import CitizenVerifyPanel from "@/components/CitizenVerifyPanel";
 import { assessComplaintCompleteness, SupplementalDetailId, SupplementalDetails, formatSupplementalForSummary, buildScoringSupplemental, extractAutoFillSupplemental } from "@/lib/complaintCompleteness";
 import { extractAreaFromText } from "@/lib/bengaluruAreas";
 import {
@@ -18,9 +19,16 @@ import {
 } from "@/lib/departments";
 import {
   getComplaintHistory,
+  getComplaintsForCitizen,
+  getDemoComplaints,
   saveComplaintToHistory,
   ComplaintRecord,
 } from "@/lib/complaintHistory";
+import {
+  loadCitizenSession,
+  clearCitizenSession,
+  CitizenSession,
+} from "@/lib/citizenSession";
 import {
   loadComplaintDraft,
   saveComplaintDraft,
@@ -252,11 +260,13 @@ export default function Home() {
   const [geocodeFailed, setGeocodeFailed] = useState(false);
   const [draftRestored, setDraftRestored] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  const [citizenSession, setCitizenSession] = useState<CitizenSession | null>(null);
+  const [showSubmitVerify, setShowSubmitVerify] = useState(false);
   const draftReadyRef = useRef(false);
   const draftStateRef = useRef<ComplaintDraft | null>(null);
 
   useEffect(() => {
-    setComplaints(getComplaintHistory());
+    setCitizenSession(loadCitizenSession());
     const draft = loadComplaintDraft();
     if (draft) {
       setActiveView(draft.activeView);
@@ -283,6 +293,26 @@ export default function Home() {
     }
     draftReadyRef.current = true;
   }, []);
+
+  const refreshComplaints = (session: CitizenSession | null = citizenSession) => {
+    setComplaints(getComplaintsForCitizen(session?.citizenHash ?? null));
+  };
+
+  useEffect(() => {
+    refreshComplaints(citizenSession);
+  }, [citizenSession]);
+
+  const handleCitizenVerified = (session: CitizenSession) => {
+    setCitizenSession(session);
+    setShowSubmitVerify(false);
+    refreshComplaints(session);
+  };
+
+  const handleCitizenSignOut = () => {
+    clearCitizenSession();
+    setCitizenSession(null);
+    refreshComplaints(null);
+  };
 
   useEffect(() => {
     const update = () => setIsOnline(navigator.onLine);
@@ -731,6 +761,15 @@ export default function Home() {
 
   const handleSubmit = async () => {
     if (isSubmitting || submittedId) return;
+    if (!citizenSession) {
+      setShowSubmitVerify(true);
+      return;
+    }
+    await completeSubmit(citizenSession.citizenHash);
+  };
+
+  const completeSubmit = async (citizenHash: string) => {
+    if (isSubmitting || submittedId) return;
     setIsSubmitting(true);
     await new Promise((r) => setTimeout(r, 1500));
     const id = `GRV-BLR-${Date.now().toString().slice(-6)}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
@@ -750,8 +789,9 @@ export default function Home() {
         urgency: analysisResult.urgency,
         ward: selectedArea?.ward || location?.ward || analysisResult.location.ward,
         locality: selectedArea?.locality || location?.locality || analysisResult.location.locality,
+        citizenHash,
       };
-      setComplaints(saveComplaintToHistory(record));
+      setComplaints(saveComplaintToHistory(record, citizenHash));
     }
 
     setSubmittedId(id);
@@ -760,6 +800,7 @@ export default function Home() {
     clearComplaintDraft();
     setDraftRestored(false);
     setDraftSavedAt(null);
+    setShowSubmitVerify(false);
     setIsSubmitting(false);
   };
 
@@ -812,6 +853,8 @@ export default function Home() {
           onLanguageChange={setLanguage}
           isOnline={isOnline}
           offlineQueueCount={offlineQueueCount}
+          citizenSession={citizenSession}
+          onSignOut={handleCitizenSignOut}
           onMyComplaintsClick={() => {
             if (step === 5 && submittedId) handleReset();
             setActiveView("history");
@@ -885,7 +928,13 @@ export default function Home() {
 
         {/* ── HISTORY VIEW ─────────────────────────────────────────── */}
         {activeView === "history" && (
-          <ComplaintHistory complaints={complaints} onUpdate={setComplaints} />
+          <ComplaintHistory
+            citizenSession={citizenSession}
+            complaints={complaints}
+            demoComplaints={getDemoComplaints()}
+            onVerified={handleCitizenVerified}
+            onUpdate={setComplaints}
+          />
         )}
 
         {/* ── FILE COMPLAINT VIEW ──────────────────────────────────── */}
@@ -1100,6 +1149,28 @@ export default function Home() {
               onEditReview={() => goToStep(3)}
             />
 
+            {showSubmitVerify && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+                <div className="w-full max-w-md">
+                  <CitizenVerifyPanel
+                    title="Verify before submitting"
+                    description="Quick mobile OTP or DigiLocker check — your identity is not shared with departments."
+                    onVerified={(session) => {
+                      handleCitizenVerified(session);
+                      void completeSubmit(session.citizenHash);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSubmitVerify(false)}
+                    className="mt-3 w-full text-center text-sm text-slate-500 hover:text-slate-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-3">
               <button
                 onClick={() => goToStep(3)}
@@ -1141,21 +1212,25 @@ export default function Home() {
                 Complaint Submitted Successfully!
               </h3>
               <p className="text-slate-500 text-sm mb-6">
-                Your grievance has been officially filed and routed to the appropriate department.
-                Use <span className="font-medium text-slate-700">My Complaints</span> to track it, or file a new grievance from the home screen.
+                Your grievance has been filed and routed to the appropriate department.
+                Track status anytime under <span className="font-medium text-slate-700">My Complaints</span> using the same mobile or DigiLocker verification — no reference number needed.
               </p>
 
-              {/* Reference ID */}
-              <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
-                <p className="text-xs text-green-600 font-medium uppercase tracking-wider mb-1">
-                  Reference Number
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-4 text-left">
+                <p className="text-xs text-blue-700 font-semibold uppercase tracking-wider mb-1">
+                  Track your complaint
                 </p>
-                <p className="font-mono font-black text-2xl text-green-800 tracking-widest">
-                  {submittedId}
+                <p className="text-sm text-blue-900">
+                  Open <span className="font-medium">My Complaints</span> and verify with{" "}
+                  {citizenSession?.maskedContact ?? "your mobile or DigiLocker"} to see live status updates.
                 </p>
-                <p className="text-xs text-green-600 mt-1">
-                  Save this for tracking your complaint status
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4">
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">
+                  Internal reference (optional)
                 </p>
+                <p className="font-mono text-sm text-slate-600">{submittedId}</p>
               </div>
 
               {/* Next steps */}
@@ -1166,7 +1241,9 @@ export default function Home() {
                     <div className="flex items-start gap-3 bg-slate-50 rounded-lg px-3 py-2">
                       <span className="text-base">📩</span>
                       <span className="text-sm text-slate-600">
-                        SMS confirmation sent to +91 98765 43210
+                        {citizenSession?.method === "mobile"
+                          ? `SMS updates will be sent to ${citizenSession.maskedContact}`
+                          : "Status updates available in My Complaints after DigiLocker verification"}
                       </span>
                     </div>
                     <div className="flex items-start gap-3 bg-slate-50 rounded-lg px-3 py-2">
@@ -1276,7 +1353,7 @@ export default function Home() {
               AI CPGRAMS Local · BBMP Grievance Portal · Bengaluru, Karnataka
             </p>
             <p className="text-blue-300/60 text-xs">
-              Powered by Next.js · Grievance data is end-to-end encrypted and handled as per IT Act 2000 &amp; Digital Personal Data Protection Act 2023
+              Grievance data is stored locally on this device with privacy-first design. Identity is verified via mobile OTP or DigiLocker without displaying your name or full number. Handled as per IT Act 2000 &amp; DPDP Act 2023.
             </p>
             <p className="text-blue-300/60 text-xs mt-1">
               Civic Helpline: <span className="text-orange-300">1533</span> · BBMP: <span className="text-orange-300">080-22660000</span> · BWSSB: <span className="text-orange-300">1916</span>

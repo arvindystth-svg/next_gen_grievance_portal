@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { X, User, Phone, MapPin, Shield, ChevronDown, Globe, Wifi, WifiOff, Bell } from "lucide-react";
-import { CITIZEN_PROFILE } from "@/lib/seedData";
+import { X, Shield, ChevronDown, Globe, Wifi, WifiOff, Bell, LogOut } from "lucide-react";
+import { CitizenSession } from "@/lib/citizenSession";
 
 const LANGUAGES = [
   { code: "en", label: "English", native: "English" },
@@ -19,6 +19,8 @@ interface HeaderProps {
   offlineQueueCount: number;
   onMyComplaintsClick?: () => void;
   complaintCount?: number;
+  citizenSession?: CitizenSession | null;
+  onSignOut?: () => void;
   /** When true, header is inside a sticky shell and should not apply its own positioning. */
   embedded?: boolean;
 }
@@ -30,6 +32,8 @@ export default function Header({
   offlineQueueCount,
   onMyComplaintsClick,
   complaintCount = 0,
+  citizenSession = null,
+  onSignOut,
   embedded = false,
 }: HeaderProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -141,11 +145,11 @@ export default function Header({
                 aria-label="Open citizen profile"
               >
                 <div className={`bg-blue-400 rounded-full flex items-center justify-center font-bold ${embedded ? "w-5 h-5 text-[10px]" : "w-6 h-6 text-xs"}`}>
-                  {CITIZEN_PROFILE.name.charAt(0)}
+                  {citizenSession ? "✓" : "?"}
                 </div>
                 {!embedded && (
-                  <span className="hidden sm:inline text-xs font-medium truncate max-w-[80px]">
-                    {CITIZEN_PROFILE.name.split(" ")[0]}
+                  <span className="hidden sm:inline text-xs font-medium truncate max-w-[100px]">
+                    {citizenSession ? citizenSession.maskedContact : "Verify"}
                   </span>
                 )}
               </button>
@@ -162,10 +166,7 @@ export default function Header({
                 <Shield size={10} />
                 <span>Govt. of India Initiative</span>
               </span>
-              <span className="hidden sm:flex items-center gap-1">
-                <MapPin size={10} />
-                <span>BBMP South Zone Coverage</span>
-              </span>
+              <span className="hidden sm:inline">BBMP South Zone Coverage</span>
             </div>
             <span className="text-blue-400">
               Helpline: <span className="text-orange-300 font-medium">1533</span>
@@ -186,7 +187,7 @@ export default function Header({
             {/* Drawer header */}
             <div className="bg-[#1a3c6e] text-white p-6 pb-8">
               <div className="flex items-center justify-between mb-4">
-                <span className="text-sm font-medium text-blue-200">Citizen Profile</span>
+                <span className="text-sm font-medium text-blue-200">Privacy &amp; verification</span>
                 <button
                   onClick={() => setDrawerOpen(false)}
                   className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
@@ -196,62 +197,47 @@ export default function Header({
               </div>
               <div className="flex items-center gap-4">
                 <div className="w-16 h-16 bg-blue-400 rounded-full flex items-center justify-center text-2xl font-bold shadow-lg">
-                  {CITIZEN_PROFILE.name.charAt(0)}
+                  {citizenSession ? "✓" : "?"}
                 </div>
                 <div>
-                  <h2 className="font-bold text-lg">{CITIZEN_PROFILE.name}</h2>
-                  <p className="text-blue-200 text-sm">{CITIZEN_PROFILE.city}</p>
+                  <h2 className="font-bold text-lg">
+                    {citizenSession ? "Verified citizen" : "Not verified"}
+                  </h2>
+                  <p className="text-blue-200 text-sm">
+                    {citizenSession
+                      ? citizenSession.maskedContact
+                      : "Verify with mobile or DigiLocker"}
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Profile details */}
             <div className="p-6 flex-1">
-              <div className="space-y-4">
-                <ProfileRow
-                  icon={<User size={16} className="text-blue-600" />}
-                  label="Citizen ID"
-                  value={CITIZEN_PROFILE.id}
-                />
-                <ProfileRow
-                  icon={<Phone size={16} className="text-green-600" />}
-                  label="Mobile"
-                  value={CITIZEN_PROFILE.phone}
-                />
-                <ProfileRow
-                  icon={<MapPin size={16} className="text-red-500" />}
-                  label="Ward"
-                  value={CITIZEN_PROFILE.registeredWard}
-                />
-              </div>
-
-              <div className="mt-6 p-4 bg-green-50 rounded-xl border border-green-200">
+              <div className="p-4 bg-green-50 rounded-xl border border-green-200">
                 <div className="flex items-center gap-2 mb-2">
                   <Shield size={16} className="text-green-600" />
-                  <span className="font-semibold text-green-800 text-sm">Verified Citizen</span>
+                  <span className="font-semibold text-green-800 text-sm">Your identity stays private</span>
                 </div>
-                <p className="text-xs text-green-700">
-                  Your Aadhaar-linked profile is verified. All submissions are digitally signed and tracked.
+                <p className="text-xs text-green-700 leading-relaxed">
+                  We do not display your name, Aadhaar, or full mobile number. Complaints are linked
+                  using a one-way secure token. Departments see only the grievance details needed for
+                  resolution.
                 </p>
               </div>
 
-              <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
-                <h3 className="font-semibold text-blue-800 text-sm mb-2">Filing Statistics</h3>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div>
-                    <div className="text-xl font-bold text-blue-700">3</div>
-                    <div className="text-xs text-blue-500">Filed</div>
-                  </div>
-                  <div>
-                    <div className="text-xl font-bold text-green-600">2</div>
-                    <div className="text-xs text-blue-500">Resolved</div>
-                  </div>
-                  <div>
-                    <div className="text-xl font-bold text-orange-500">1</div>
-                    <div className="text-xs text-blue-500">Pending</div>
-                  </div>
-                </div>
-              </div>
+              {citizenSession && onSignOut && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSignOut();
+                    setDrawerOpen(false);
+                  }}
+                  className="mt-4 w-full flex items-center justify-center gap-2 border border-slate-200 text-slate-600 hover:bg-slate-50 py-2.5 rounded-xl text-sm font-medium"
+                >
+                  <LogOut size={14} />
+                  Sign out (this device)
+                </button>
+              )}
             </div>
 
             {/* Drawer footer */}
@@ -267,25 +253,5 @@ export default function Header({
         </div>
       )}
     </>
-  );
-}
-
-function ProfileRow({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
-      <div className="mt-0.5">{icon}</div>
-      <div>
-        <div className="text-xs text-slate-500 font-medium uppercase tracking-wider">{label}</div>
-        <div className="text-sm font-semibold text-slate-800 mt-0.5">{value}</div>
-      </div>
-    </div>
   );
 }

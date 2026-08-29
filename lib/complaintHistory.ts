@@ -18,6 +18,8 @@ export interface ComplaintRecord {
   urgency: "HIGH" | "MEDIUM" | "LOW";
   ward?: string;
   locality?: string;
+  /** One-way citizen hash — links complaint to verified session without storing PII. */
+  citizenHash?: string;
 }
 
 const STORAGE_KEY = "cpgrams_complaint_history_v1";
@@ -83,6 +85,18 @@ function mergeHistory(stored: ComplaintRecord[]): ComplaintRecord[] {
   );
 }
 
+export function getDemoComplaints(): ComplaintRecord[] {
+  return SEED_COMPLAINT_HISTORY;
+}
+
+export function getComplaintsForCitizen(citizenHash: string | null): ComplaintRecord[] {
+  if (!citizenHash) return [];
+  const all = getComplaintHistory();
+  return all
+    .filter((c) => c.citizenHash === citizenHash)
+    .sort((a, b) => new Date(b.raisedAt).getTime() - new Date(a.raisedAt).getTime());
+}
+
 export function getComplaintHistory(): ComplaintRecord[] {
   if (typeof window === "undefined") return SEED_COMPLAINT_HISTORY;
   try {
@@ -95,9 +109,13 @@ export function getComplaintHistory(): ComplaintRecord[] {
   }
 }
 
-export function saveComplaintToHistory(record: ComplaintRecord): ComplaintRecord[] {
-  const existing = getComplaintHistory().filter((c) => c.id !== record.id);
-  const updated = [record, ...existing].sort(
+export function saveComplaintToHistory(
+  record: ComplaintRecord,
+  citizenHash?: string
+): ComplaintRecord[] {
+  const toSave = citizenHash ? { ...record, citizenHash } : record;
+  const existing = getComplaintHistory().filter((c) => c.id !== toSave.id);
+  const updated = [toSave, ...existing].sort(
     (a, b) => new Date(b.raisedAt).getTime() - new Date(a.raisedAt).getTime()
   );
   if (typeof window !== "undefined") {

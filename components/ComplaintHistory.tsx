@@ -11,6 +11,8 @@ import {
   MessageSquare,
   CheckCircle2,
 } from "lucide-react";
+import CitizenVerifyPanel from "@/components/CitizenVerifyPanel";
+import { CitizenSession } from "@/lib/citizenSession";
 import {
   ComplaintRecord,
   ComplaintStatus,
@@ -20,7 +22,10 @@ import {
 } from "@/lib/complaintHistory";
 
 interface ComplaintHistoryProps {
+  citizenSession: CitizenSession | null;
   complaints: ComplaintRecord[];
+  demoComplaints: ComplaintRecord[];
+  onVerified: (session: CitizenSession) => void;
   onUpdate: (complaints: ComplaintRecord[]) => void;
 }
 
@@ -191,16 +196,47 @@ function ComplaintCard({
   );
 }
 
-export default function ComplaintHistory({ complaints, onUpdate }: ComplaintHistoryProps) {
+export default function ComplaintHistory({
+  citizenSession,
+  complaints,
+  demoComplaints,
+  onVerified,
+  onUpdate,
+}: ComplaintHistoryProps) {
+  const [showDemo, setShowDemo] = useState(false);
+
   const handleFeedback = (id: string, rating: number) => {
     const updated = updateComplaintFeedback(id, rating);
     onUpdate(updated);
   };
 
+  if (!citizenSession) {
+    return (
+      <CitizenVerifyPanel
+        title="Verify to see your complaints"
+        description="Use your mobile number or DigiLocker — no reference IDs to remember. Your name and full number are never shown."
+        onVerified={onVerified}
+      />
+    );
+  }
+
   if (complaints.length === 0) {
     return (
-      <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
-        <p className="text-slate-500 text-sm">No complaints filed yet.</p>
+      <div className="space-y-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center">
+          <p className="text-slate-700 text-sm font-medium">No complaints filed yet for this verification.</p>
+          <p className="text-slate-500 text-xs mt-1">
+            File a grievance — it will appear here automatically after you submit.
+          </p>
+        </div>
+        {demoComplaints.length > 0 && (
+          <DemoSection
+            complaints={demoComplaints}
+            expanded={showDemo}
+            onToggle={() => setShowDemo((v) => !v)}
+            onFeedback={handleFeedback}
+          />
+        )}
       </div>
     );
   }
@@ -244,6 +280,47 @@ export default function ComplaintHistory({ complaints, onUpdate }: ComplaintHist
           <ComplaintCard key={c.id} complaint={c} onFeedback={handleFeedback} />
         ))}
       </div>
+
+      {demoComplaints.length > 0 && (
+        <DemoSection
+          complaints={demoComplaints}
+          expanded={showDemo}
+          onToggle={() => setShowDemo((v) => !v)}
+          onFeedback={handleFeedback}
+        />
+      )}
+    </div>
+  );
+}
+
+function DemoSection({
+  complaints,
+  expanded,
+  onToggle,
+  onFeedback,
+}: {
+  complaints: ComplaintRecord[];
+  expanded: boolean;
+  onToggle: () => void;
+  onFeedback: (id: string, rating: number) => void;
+}) {
+  return (
+    <div className="border border-dashed border-slate-300 rounded-xl overflow-hidden">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full px-4 py-3 text-left bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-600 flex items-center justify-between"
+      >
+        <span>Sample complaints (demonstration only)</span>
+        <ChevronDown size={14} className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
+      </button>
+      {expanded && (
+        <div className="p-3 space-y-3 bg-white">
+          {complaints.map((c) => (
+            <ComplaintCard key={c.id} complaint={c} onFeedback={onFeedback} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
