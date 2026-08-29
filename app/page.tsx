@@ -202,6 +202,7 @@ export default function Home() {
           lng: location?.lng,
           ward: location?.ward,
           zone: location?.zone,
+          language,
         }),
       });
       if (!res.ok) {

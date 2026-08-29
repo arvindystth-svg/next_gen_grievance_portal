@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  getSarvamApiKey,
+  sarvamExtractLocation,
+  sarvamAnalyzeGrievance,
+} from "@/lib/sarvam";
 
 interface AnalysisResult {
   summary: string;
@@ -27,6 +32,7 @@ interface LocationContext {
   lng?: number;
   ward?: string;
   zone?: string;
+  locality?: string;
 }
 
 const SYSTEM_PROMPT = `You are an AI grievance classifier for the Indian government's CPGRAMS (Centralised Public Grievance Redress and Monitoring System) portal, serving citizens of Bengaluru, Karnataka (BBMP, BWSSB, BESCOM).
@@ -65,7 +71,7 @@ Classification rules:
 - confidence is 0–100 reflecting how clearly the complaint was understood.
 - Return JSON only. No markdown or extra text.`;
 
-/** Hardcoded water-supply mock — used only when OpenAI is unavailable or fails. */
+/** Hardcoded water-supply mock — used only when both OpenAI and Sarvam are unavailable or fail. */
 function waterSupplyMockFallback(ctx: LocationContext): AnalysisResult {
   return {
     summary:
@@ -122,6 +128,7 @@ function normalizeAnalysis(
     location: {
       locality:
         raw.location?.locality?.trim() ||
+        ctx.locality ||
         ctx.ward?.split(" - ")[1] ||
         "Bengaluru",
       ward: raw.location?.ward?.trim() || ctx.ward || "Ward to be confirmed",
@@ -159,6 +166,28 @@ function normalizeAnalysis(
   };
 }
 
+async function enrichLocationWithSarvam(
+  citizenText: string,
+  ctx: LocationContext,
+  apiKey: string
+): Promise<LocationContext> {
+  try {
+    const extracted = await sarvamExtractLocation(citizenText, apiKey);
+    if (!extracted) return ctx;
+
+    return {
+      lat: ctx.lat,
+      lng: ctx.lng,
+      ward: ctx.ward || extracted.ward || undefined,
+      zone: ctx.zone || extracted.zone || undefined,
+      locality: ctx.locality || extracted.locality || undefined,
+    };
+  } catch (err) {
+    console.error("Sarvam location extraction failed (non-fatal):", err);
+    return ctx;
+  }
+}
+
 async function openAIAnalysis(
   citizenText: string,
   ctx: LocationContext,
@@ -175,6 +204,7 @@ async function openAIAnalysis(
     `- longitude: ${ctx.lng ?? "not provided"}`,
     `- ward: ${ctx.ward ?? "not provided"}`,
     `- zone: ${ctx.zone ?? "not provided"}`,
+    `- locality: ${ctx.locality ?? "not provided"}`,
     "",
     "Classify this specific complaint and return the JSON schema described in the system prompt.",
   ].join("\n");
@@ -212,10 +242,19 @@ async function openAIAnalysis(
   return normalizeAnalysis(parsed, ctx);
 }
 
+async function sarvamAnalysis(
+  citizenText: string,
+  ctx: LocationContext,
+  apiKey: string
+): Promise<AnalysisResult> {
+  const parsed = await sarvamAnalyzeGrievance(citizenText, ctx, SYSTEM_PROMPT, apiKey);
+  return normalizeAnalysis(parsed as Partial<AnalysisResult>, ctx);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { text, transcript, lat, lng, ward, zone } = body;
+    const { text, transcript, lat, lng, ward, zone, language } = body;
 
     const citizenText = (text || transcript || "").trim();
     if (!citizenText || citizenText.length < 5) {
@@ -225,18 +264,51 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const locationCtx: LocationContext = { lat, lng, ward, zone };
+    let locationCtx: LocationContext = { lat, lng, ward, zone };
     const openaiKey = process.env.OPENAI_API_KEY?.trim();
+    const sarvamKey = getSarvamApiKey();
+    const sarvamSteps: string[] = [];
+
+    // Layer 3: Sarvam NLP spatial entity extraction
+    if (sarvamKey) {
+      locationCtx = await enrichLocationWithSarvam(citizenText, locationCtx, sarvamKey);
+      sarvamSteps.push("location-extraction");
+    }
 
     let result: AnalysisResult;
     let modelUsed: string;
+    const pipeline: string[] = [];
 
     if (openaiKey) {
       try {
         result = await openAIAnalysis(citizenText, locationCtx, openaiKey);
         modelUsed = process.env.OPENAI_MODEL || "gpt-4o-mini";
-      } catch (err) {
-        console.error("OpenAI failed, falling back to water-supply mock:", err);
+        pipeline.push("openai");
+        if (sarvamSteps.length) pipeline.push(...sarvamSteps);
+      } catch (openaiErr) {
+        console.error("OpenAI failed:", openaiErr);
+        if (sarvamKey) {
+          try {
+            result = await sarvamAnalysis(citizenText, locationCtx, sarvamKey);
+            modelUsed = process.env.SARVAM_MODEL?.trim() || "sarvam-105b-conversations";
+            pipeline.push("sarvam-fallback", ...sarvamSteps);
+          } catch (sarvamErr) {
+            console.error("Sarvam analysis also failed, using water-supply mock:", sarvamErr);
+            result = waterSupplyMockFallback(locationCtx);
+            modelUsed = "water-supply-mock-fallback";
+          }
+        } else {
+          result = waterSupplyMockFallback(locationCtx);
+          modelUsed = "water-supply-mock-fallback";
+        }
+      }
+    } else if (sarvamKey) {
+      try {
+        result = await sarvamAnalysis(citizenText, locationCtx, sarvamKey);
+        modelUsed = process.env.SARVAM_MODEL?.trim() || "sarvam-105b-conversations";
+        pipeline.push("sarvam", ...sarvamSteps);
+      } catch (sarvamErr) {
+        console.error("Sarvam analysis failed, using water-supply mock:", sarvamErr);
         result = waterSupplyMockFallback(locationCtx);
         modelUsed = "water-supply-mock-fallback";
       }
@@ -249,6 +321,9 @@ export async function POST(req: NextRequest) {
       ...result,
       processedAt: new Date().toISOString(),
       model: modelUsed,
+      pipeline,
+      input_language: language || null,
+      sarvam_enriched_location: Boolean(sarvamSteps.length),
     });
   } catch (err) {
     console.error("analyze-grievance error:", err);
@@ -260,14 +335,23 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  const hasKey = Boolean(process.env.OPENAI_API_KEY?.trim());
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY?.trim());
+  const hasSarvam = Boolean(getSarvamApiKey());
+
+  const models: string[] = [];
+  if (hasOpenAI) models.push(process.env.OPENAI_MODEL || "gpt-4o-mini");
+  if (hasSarvam) {
+    models.push("sarvam-saaras-v3 (STT)");
+    models.push(process.env.SARVAM_MODEL?.trim() || "sarvam-105b-conversations (NLP)");
+  }
+  if (!models.length) models.push("water-supply-mock-fallback");
+
   return NextResponse.json({
     status: "ok",
     service: "AI CPGRAMS Grievance Analyzer",
-    version: "1.1",
-    openai_configured: hasKey,
-    models: hasKey
-      ? [process.env.OPENAI_MODEL || "gpt-4o-mini"]
-      : ["water-supply-mock-fallback (OPENAI_API_KEY not set)"],
+    version: "1.2",
+    openai_configured: hasOpenAI,
+    sarvam_configured: hasSarvam,
+    models,
   });
 }
