@@ -1,3 +1,5 @@
+import { extractAreaFromText } from "./bengaluruAreas";
+
 export interface CompletenessField {
   id: string;
   label: string;
@@ -115,40 +117,107 @@ function combinedText(
   return parts.join("\n").toLowerCase();
 }
 
-const SUPPLEMENTAL_MIN: Record<SupplementalDetailId, number> = {
-  description: 15,
-  ward: 10,
-  landmark: 8,
-  timeline: 8,
-  consumer_id: 8,
-};
+const PUBLIC_STREET_LIGHT_PATTERNS = [
+  /\bstreet\s*lights?\b/i,
+  /\bstreetlights?\b/i,
+  /\bstreet\s*lamps?\b/i,
+  /\blamp\s*posts?\b/i,
+  /\bstreet\s*lighting\b/i,
+  /\bdark\s+(street|road|area|stretch)\b/i,
+  /\bnon[\s-]?functional\s+lights?\b/i,
+  /\bbroken\s+street\s*lights?\b/i,
+  /\bpublic\s+lighting\b/i,
+  /\bpole\s*lights?\b/i,
+];
 
-function supplementalMeetsMin(id: SupplementalDetailId, supplemental?: SupplementalDetails): boolean {
+const PERSONAL_UTILITY_PATTERNS = [
+  /\b(my|our)\s+(home|house|flat|apartment|premises|building)\b/i,
+  /\bmeter\b/i,
+  /\bconsumer\b/i,
+  /\brr\s*(no\.?|number)\b/i,
+  /\bconnection\s*(no\.?|number|id)\b/i,
+  /\baccount\s*(no\.?|number)\b/i,
+  /\belectricity\s*bill\b/i,
+  /\bwater\s*bill\b/i,
+  /\bwater\s*connection\b/i,
+];
+
+function isGibberish(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  const compact = trimmed.replace(/\s+/g, "");
+  if (compact.length >= 5 && /^(.)\1+$/i.test(compact)) return true;
+  const letters = trimmed.replace(/[^a-zA-Z]/g, "");
+  if (letters.length >= 8 && !/[aeiou]/i.test(letters)) return true;
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.length === 1 && words[0].length < 12 && !/[aeiou]/i.test(words[0])) return true;
+  return false;
+}
+
+function supplementalIsValid(id: SupplementalDetailId, supplemental?: SupplementalDetails): boolean {
   const val = supplemental?.[id]?.trim();
   if (!val) return false;
-  return val.length >= SUPPLEMENTAL_MIN[id];
+
+  switch (id) {
+    case "description": {
+      if (val.length < 15) return false;
+      const words = val.split(/\s+/).filter(Boolean);
+      return words.length >= 3 && !isGibberish(val);
+    }
+    case "ward":
+      if (val.length < 4 || isGibberish(val)) return false;
+      return Boolean(extractAreaFromText(val) || /\bward\s*\d+/i.test(val) || /\blocalit(y|ies)\b/i.test(val));
+    case "landmark": {
+      if (val.length < 8 || isGibberish(val)) return false;
+      if (LANDMARK_PATTERNS.some((p) => p.test(val))) return true;
+      const words = val.split(/\s+/).filter((w) => w.length > 2);
+      return words.length >= 2;
+    }
+    case "timeline":
+      return TIMELINE_PATTERNS.some((p) => p.test(val));
+    case "consumer_id":
+      return /\d{4,}/.test(val) || CONSUMER_ID_PATTERNS.some((p) => p.test(val));
+    default:
+      return false;
+  }
 }
 
 function hasLandmark(text: string, supplemental?: SupplementalDetails): boolean {
-  if (supplementalMeetsMin("landmark", supplemental)) return true;
+  if (supplementalIsValid("landmark", supplemental)) return true;
   return LANDMARK_PATTERNS.some((p) => p.test(text));
 }
 
 function hasTimeline(text: string, supplemental?: SupplementalDetails): boolean {
-  if (supplementalMeetsMin("timeline", supplemental)) return true;
+  if (supplementalIsValid("timeline", supplemental)) return true;
   return TIMELINE_PATTERNS.some((p) => p.test(text));
 }
 
 function hasConsumerId(text: string, supplemental?: SupplementalDetails): boolean {
-  if (supplementalMeetsMin("consumer_id", supplemental)) return true;
+  if (supplementalIsValid("consumer_id", supplemental)) return true;
   return CONSUMER_ID_PATTERNS.some((p) => p.test(text));
 }
 
-function needsUtilityId(departments: string[]): boolean {
-  return departments.some(
-    (d) =>
-      d.includes("BWSSB") || d.includes("BESCOM") || d.includes("Electrical")
-  );
+function isPublicStreetLightingComplaint(text: string): boolean {
+  return PUBLIC_STREET_LIGHT_PATTERNS.some((p) => p.test(text));
+}
+
+function needsUtilityId(
+  departments: string[],
+  grievanceText: string,
+  editedSummary: string,
+  supplemental?: SupplementalDetails
+): boolean {
+  const text = combinedText(grievanceText, editedSummary, supplemental);
+
+  if (isPublicStreetLightingComplaint(text)) return false;
+
+  if (departments.some((d) => d.includes("BWSSB"))) return true;
+
+  if (departments.some((d) => d.includes("BESCOM"))) {
+    return PERSONAL_UTILITY_PATTERNS.some((p) => p.test(text));
+  }
+
+  return false;
 }
 
 function areaConfirmed(
@@ -156,7 +225,7 @@ function areaConfirmed(
   location: LocationInput | null,
   supplemental?: SupplementalDetails
 ): boolean {
-  if (supplemental?.ward && supplemental.ward.trim().length >= 10) return true;
+  if (supplementalIsValid("ward", supplemental)) return true;
   const ward = selectedArea?.ward || location?.ward;
   if (!ward) return false;
   const w = ward.toLowerCase();
@@ -166,7 +235,12 @@ function areaConfirmed(
 export function assessComplaintCompleteness(params: AssessParams): CompletenessReport {
   const supplemental = params.supplemental;
   const text = combinedText(params.grievanceText, params.editedSummary, supplemental);
-  const utilityNeeded = needsUtilityId(params.selectedLocalDepartments);
+  const utilityNeeded = needsUtilityId(
+    params.selectedLocalDepartments,
+    params.grievanceText,
+    params.editedSummary,
+    supplemental
+  );
   const fields: CompletenessField[] = [];
 
   fields.push({
@@ -175,7 +249,7 @@ export function assessComplaintCompleteness(params: AssessParams): CompletenessR
     fillHint: "A clear description of what is wrong and how it affects you.",
     completed:
       params.grievanceText.trim().length >= 20 ||
-      supplementalMeetsMin("description", supplemental),
+      supplementalIsValid("description", supplemental),
     weight: utilityNeeded ? 25 : 28,
     interactive: true,
   });

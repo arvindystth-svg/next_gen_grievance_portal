@@ -253,6 +253,7 @@ export default function Home() {
   const [enabledDetails, setEnabledDetails] = useState<Partial<Record<SupplementalDetailId, boolean>>>({});
   const [supplementalDetails, setSupplementalDetails] = useState<SupplementalDetails>({});
   const [analysisSnapshot, setAnalysisSnapshot] = useState<AnalysisSnapshot | null>(null);
+  const [formSessionKey, setFormSessionKey] = useState(0);
 
   useEffect(() => {
     setComplaints(getComplaintHistory());
@@ -320,6 +321,10 @@ export default function Home() {
 
   const goToStep = (target: Step) => {
     if (!canNavigateTo(target, step, maxStepReached, isAnalyzing)) return;
+    if (step === 4 && target === 1) {
+      handleReset();
+      return;
+    }
     if (step === 4) setSubmittedId(null);
     setIsAnalyzing(false);
     setStep(target);
@@ -373,7 +378,7 @@ export default function Home() {
   };
 
   const handleDetailBlur = (id: SupplementalDetailId, value: string) => {
-    if (id === "ward" && value.trim().length >= 10) {
+    if (id === "ward" && value.trim().length >= 4) {
       const extracted = extractAreaFromText(value);
       if (extracted) applySelectedArea(extracted);
     }
@@ -607,6 +612,7 @@ export default function Home() {
     setAnalysisSnapshot(null);
     setMaxStepReached(1);
     lastAutoRoutedSummary.current = null;
+    setFormSessionKey((k) => k + 1);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -651,7 +657,10 @@ export default function Home() {
         <div className="flex gap-2 mb-5 p-1 bg-slate-200/60 rounded-xl">
           <button
             type="button"
-            onClick={() => setActiveView("file")}
+            onClick={() => {
+              if (step === 4) handleReset();
+              setActiveView("file");
+            }}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
               activeView === "file"
                 ? "bg-white text-[#1a3c6e] shadow-sm"
@@ -715,6 +724,7 @@ export default function Home() {
               </div>
               <div className="p-5">
                 <VoiceTextRecorder
+                  key={formSessionKey}
                   text={grievanceText}
                   onTextChange={setGrievanceText}
                   language={language}
@@ -1063,8 +1073,8 @@ export default function Home() {
                 </button>
                 <button
                   onClick={() => {
+                    handleReset();
                     setActiveView("history");
-                    setStep(1);
                   }}
                   className="flex-1 bg-slate-100 hover:bg-slate-200 text-[#1a3c6e] font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
                 >
