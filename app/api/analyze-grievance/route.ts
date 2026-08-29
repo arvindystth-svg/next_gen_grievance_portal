@@ -22,222 +22,162 @@ interface AnalysisResult {
   suggested_actions: string[];
 }
 
-// Keyword-based heuristic for when OpenAI key is absent
-function heuristicAnalysis(
-  text: string,
-  lat?: number,
-  lng?: number,
-  ward?: string,
-  zone?: string
-): AnalysisResult {
-  const lower = text.toLowerCase();
+interface LocationContext {
+  lat?: number;
+  lng?: number;
+  ward?: string;
+  zone?: string;
+}
 
-  // Category detection
-  let cpgrams_category = "Ministry of Housing and Urban Affairs";
-  let local_department = "BBMP General Services";
-  let urgency: "HIGH" | "MEDIUM" | "LOW" = "MEDIUM";
-  let keywords: string[] = [];
-  let suggested_actions: string[] = [];
+const SYSTEM_PROMPT = `You are an AI grievance classifier for the Indian government's CPGRAMS (Centralised Public Grievance Redress and Monitoring System) portal, serving citizens of Bengaluru, Karnataka (BBMP, BWSSB, BESCOM).
 
-  if (
-    lower.includes("water") ||
-    lower.includes("pipe") ||
-    lower.includes("leak") ||
-    lower.includes("burst") ||
-    lower.includes("bwssb")
-  ) {
-    local_department = "BWSSB Water Supply";
-    cpgrams_category = "Ministry of Housing and Urban Affairs";
-    keywords = ["water", "pipe", "leak", "BWSSB"];
-    urgency = lower.includes("burst") || lower.includes("flood") ? "HIGH" : "MEDIUM";
-    suggested_actions = [
-      "BWSSB emergency team dispatch",
-      "Shut off main valve at junction",
-      "Notify area engineer",
-    ];
-  } else if (
-    lower.includes("pothole") ||
-    lower.includes("road") ||
-    lower.includes("road condition") ||
-    lower.includes("tar") ||
-    lower.includes("asphalt")
-  ) {
-    local_department = "BBMP Roads & Infrastructure";
-    cpgrams_category = "Ministry of Road Transport and Highways";
-    keywords = ["pothole", "road", "BBMP", "infrastructure"];
-    urgency = lower.includes("hospital") || lower.includes("school") ? "HIGH" : "MEDIUM";
-    suggested_actions = [
-      "Road maintenance crew dispatch",
-      "Pothole patching on priority basis",
-      "Temporary signage placement",
-    ];
-  } else if (
-    lower.includes("garbage") ||
-    lower.includes("waste") ||
-    lower.includes("sanitation") ||
-    lower.includes("dump") ||
-    lower.includes("litter")
-  ) {
-    local_department = "BBMP Solid Waste Management";
-    cpgrams_category = "Ministry of Housing and Urban Affairs";
-    keywords = ["garbage", "waste", "sanitation", "BBMP"];
-    urgency = lower.includes("hospital") || lower.includes("school") ? "HIGH" : "MEDIUM";
-    suggested_actions = [
-      "Schedule emergency garbage pickup",
-      "Clean and sanitize the blackspot",
-      "Place covered waste bins at location",
-    ];
-  } else if (
-    lower.includes("streetlight") ||
-    lower.includes("light") ||
-    lower.includes("electricity") ||
-    lower.includes("power") ||
-    lower.includes("bescom")
-  ) {
-    local_department = "BESCOM Electrical Infrastructure";
-    cpgrams_category = "Ministry of Power";
-    keywords = ["streetlight", "electricity", "BESCOM"];
-    urgency = lower.includes("dark") || lower.includes("safety") ? "HIGH" : "LOW";
-    suggested_actions = [
-      "BESCOM field inspection",
-      "Streetlight replacement/repair",
-      "Fault logging in BESCOM system",
-    ];
-  } else if (
-    lower.includes("drain") ||
-    lower.includes("flood") ||
-    lower.includes("stormwater") ||
-    lower.includes("sewage")
-  ) {
-    local_department = "BBMP Stormwater Drains";
-    cpgrams_category = "Ministry of Jal Shakti";
-    keywords = ["drain", "flood", "stormwater"];
-    urgency = lower.includes("flood") ? "HIGH" : "MEDIUM";
-    suggested_actions = [
-      "Drain desilting on urgent basis",
-      "Sewage inspection by BWSSB",
-      "Flooding risk assessment",
-    ];
-  }
+Analyze the citizen's specific complaint text and return valid JSON with exactly this schema:
 
-  // Location inference from text
-  let inferredLocality = ward ? ward.split(" - ")[1] || "Bengaluru" : "Bengaluru";
-  const locationKeywords = [
-    "koramangala", "bellandur", "indiranagar", "jayanagar", "hebbal",
-    "domlur", "whitefield", "marathahalli", "electronic city", "rajajinagar",
-    "malleswaram", "yeshwanthpur", "banashankari", "jp nagar", "btm layout",
-  ];
-  for (const loc of locationKeywords) {
-    if (lower.includes(loc)) {
-      inferredLocality = loc.charAt(0).toUpperCase() + loc.slice(1);
-      break;
-    }
-  }
+{
+  "summary": "Two formal sentences in official governance English summarizing the citizen's specific problem.",
+  "cpgrams_category": "Relevant Central Ministry",
+  "local_department": "Responsible local body",
+  "urgency": "HIGH | MEDIUM | LOW",
+  "location": {
+    "locality": "string",
+    "ward": "string",
+    "zone": "South Zone | East Zone | North Zone | West Zone | Central Zone",
+    "latitude": number,
+    "longitude": number
+  },
+  "missing_details_advisory": {
+    "is_missing": boolean,
+    "observation": "string",
+    "why_it_matters": "string"
+  },
+  "confidence": number,
+  "keywords": ["string"],
+  "suggested_actions": ["string"]
+}
 
-  // Missing details check
-  const hasLandmark =
-    lower.includes("near") ||
-    lower.includes("opposite") ||
-    lower.includes("beside") ||
-    lower.includes("outside") ||
-    lower.includes("hospital") ||
-    lower.includes("school") ||
-    lower.includes("metro") ||
-    lower.includes("station");
-  
-  const hasId =
-    lower.includes("connection") ||
-    lower.includes("consumer") ||
-    lower.includes("account") ||
-    lower.includes("number");
+Classification rules:
+- Base summary, cpgrams_category, local_department, and urgency on the ACTUAL complaint (street lights, drainage, potholes, garbage, water leak, power outage, parks, noise, etc.).
+- cpgrams_category examples: Ministry of Power, Ministry of Housing and Urban Affairs, Ministry of Road Transport and Highways, Ministry of Jal Shakti.
+- local_department examples: BBMP Electrical, BBMP Storm Water Drains, BBMP Roads & Infrastructure, BBMP Solid Waste Management, BWSSB Water Supply, BESCOM.
+- urgency HIGH for safety risks, hospital/school proximity, flooding, burst pipes, live wires; MEDIUM for service disruption; LOW for minor nuisances.
+- Use provided GPS/ward hints when available; otherwise infer locality and ward from complaint text.
+- missing_details_advisory.is_missing should be true when no landmark, address, or consumer ID is mentioned.
+- confidence is 0–100 reflecting how clearly the complaint was understood.
+- Return JSON only. No markdown or extra text.`;
 
-  const isMissing = !hasLandmark && !hasId;
-
-  // Build summary
-  const locationPhrase = inferredLocality
-    ? `in ${inferredLocality}, ${ward || "Bengaluru"}`
-    : "in Bengaluru";
-
-  let summary = "";
-  if (lower.includes("water") || lower.includes("pipe") || lower.includes("leak")) {
-    summary = `A water supply infrastructure failure has been reported ${locationPhrase}. The complaint indicates a ${lower.includes("burst") ? "pipe burst" : "water leak"} requiring immediate BWSSB intervention to prevent water wastage and road damage.`;
-  } else if (lower.includes("pothole") || lower.includes("road")) {
-    summary = `Road infrastructure damage in the form of ${lower.includes("pothole") ? "potholes" : "damaged road surface"} has been reported ${locationPhrase}. BBMP Roads & Infrastructure division is required to conduct emergency road repairs at the identified stretch.`;
-  } else if (lower.includes("garbage") || lower.includes("waste")) {
-    summary = `Uncleared solid waste accumulation constituting a public health hazard has been identified ${locationPhrase}. BBMP Solid Waste Management is required to dispatch collection personnel and sanitize the affected area on a priority basis.`;
-  } else {
-    summary = `A civic grievance concerning ${local_department} has been filed by a resident ${locationPhrase}. The issue requires prompt attention and field inspection by the appropriate municipal authority.`;
-  }
-
+/** Hardcoded water-supply mock — used only when OpenAI is unavailable or fails. */
+function waterSupplyMockFallback(ctx: LocationContext): AnalysisResult {
   return {
-    summary,
-    cpgrams_category,
-    local_department,
-    urgency,
+    summary:
+      "A water supply infrastructure failure has been reported in the Koramangala area. The complaint indicates a pipe burst or major leak requiring immediate BWSSB intervention to prevent water wastage and road damage.",
+    cpgrams_category: "Ministry of Housing and Urban Affairs",
+    local_department: "BBMP Engineering / BWSSB Water Supply",
+    urgency: "HIGH",
     location: {
-      locality: inferredLocality,
-      ward: ward || "Ward to be confirmed",
-      zone: zone || "To be confirmed",
-      latitude: lat || 12.9716,
-      longitude: lng || 77.5946,
+      locality: "Koramangala 4th Block",
+      ward: ctx.ward || "Ward 151 - Koramangala",
+      zone: ctx.zone || "South Zone",
+      latitude: ctx.lat ?? 12.9344,
+      longitude: ctx.lng ?? 77.6251,
     },
     missing_details_advisory: {
-      is_missing: isMissing,
-      observation: isMissing
-        ? "No specific landmark or consumer ID detected in the complaint."
-        : "Location landmark identified successfully.",
-      why_it_matters: isMissing
-        ? "Specific landmarks allow quick dispatch of maintenance vans without additional field surveys."
-        : "The complaint contains sufficient location detail for field crew dispatch.",
+      is_missing: false,
+      observation: "Landmark identified successfully.",
+      why_it_matters: "Specific landmarks allow quick dispatch of maintenance vans.",
     },
-    confidence: isMissing ? 72 : 91,
-    keywords,
-    suggested_actions,
+    confidence: 75,
+    keywords: ["water", "BWSSB", "supply"],
+    suggested_actions: [
+      "Dispatch BWSSB emergency repair crew",
+      "Shut off main valve at junction",
+      "Notify area engineer",
+    ],
+  };
+}
+
+function normalizeUrgency(value: unknown): "HIGH" | "MEDIUM" | "LOW" {
+  const upper = String(value ?? "MEDIUM").toUpperCase();
+  if (upper === "HIGH" || upper === "LOW") return upper;
+  return "MEDIUM";
+}
+
+function normalizeAnalysis(
+  raw: Partial<AnalysisResult>,
+  ctx: LocationContext
+): AnalysisResult {
+  return {
+    summary:
+      typeof raw.summary === "string" && raw.summary.trim()
+        ? raw.summary.trim()
+        : "A civic grievance has been filed by a resident in Bengaluru. The issue requires prompt attention and field inspection by the appropriate municipal authority.",
+    cpgrams_category:
+      typeof raw.cpgrams_category === "string" && raw.cpgrams_category.trim()
+        ? raw.cpgrams_category.trim()
+        : "Ministry of Housing and Urban Affairs",
+    local_department:
+      typeof raw.local_department === "string" && raw.local_department.trim()
+        ? raw.local_department.trim()
+        : "BBMP General Services",
+    urgency: normalizeUrgency(raw.urgency),
+    location: {
+      locality:
+        raw.location?.locality?.trim() ||
+        ctx.ward?.split(" - ")[1] ||
+        "Bengaluru",
+      ward: raw.location?.ward?.trim() || ctx.ward || "Ward to be confirmed",
+      zone: raw.location?.zone?.trim() || ctx.zone || "To be confirmed",
+      latitude:
+        typeof raw.location?.latitude === "number"
+          ? raw.location.latitude
+          : ctx.lat ?? 12.9716,
+      longitude:
+        typeof raw.location?.longitude === "number"
+          ? raw.location.longitude
+          : ctx.lng ?? 77.5946,
+    },
+    missing_details_advisory: {
+      is_missing: Boolean(raw.missing_details_advisory?.is_missing),
+      observation:
+        raw.missing_details_advisory?.observation?.trim() ||
+        "Details reviewed for completeness.",
+      why_it_matters:
+        raw.missing_details_advisory?.why_it_matters?.trim() ||
+        "Specific landmarks allow quick dispatch of maintenance vans.",
+    },
+    confidence:
+      typeof raw.confidence === "number"
+        ? Math.min(100, Math.max(0, Math.round(raw.confidence)))
+        : 85,
+    keywords: Array.isArray(raw.keywords)
+      ? raw.keywords.filter((k): k is string => typeof k === "string").slice(0, 8)
+      : [],
+    suggested_actions: Array.isArray(raw.suggested_actions)
+      ? raw.suggested_actions
+          .filter((a): a is string => typeof a === "string")
+          .slice(0, 5)
+      : [],
   };
 }
 
 async function openAIAnalysis(
-  text: string,
-  lat?: number,
-  lng?: number,
-  ward?: string,
-  zone?: string,
-  apiKey?: string
+  citizenText: string,
+  ctx: LocationContext,
+  apiKey: string
 ): Promise<AnalysisResult> {
-  const prompt = `You are an AI assistant for the Indian government's CPGRAMS (Centralised Public Grievance Redress and Monitoring System) portal, specifically for BBMP (Bruhat Bengaluru Mahanagara Palike) and municipal services in Bengaluru, Karnataka.
+  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-Analyze the following citizen grievance and return a JSON object with exactly this structure:
-
-{
-  "summary": "Formal 2-sentence summary of the grievance in official governance English.",
-  "cpgrams_category": "Ministry of Housing and Urban Affairs",
-  "local_department": "BBMP Engineering / BWSSB Water Supply",
-  "urgency": "HIGH",
-  "location": {
-    "locality": "Koramangala 4th Block",
-    "ward": "Ward 151 - Koramangala",
-    "zone": "South Zone",
-    "latitude": ${lat || 12.9716},
-    "longitude": ${lng || 77.5946}
-  },
-  "missing_details_advisory": {
-    "is_missing": false,
-    "observation": "Landmark identified successfully.",
-    "why_it_matters": "Specific landmarks allow quick dispatch of maintenance vans."
-  },
-  "confidence": 92,
-  "keywords": ["water", "leak", "Koramangala"],
-  "suggested_actions": ["Dispatch BWSSB repair crew", "Shut main valve at junction"]
-}
-
-Rules:
-- urgency must be HIGH, MEDIUM, or LOW
-- local_department should reference BBMP, BWSSB, BESCOM, or other Bengaluru agencies
-- summary must be exactly 2 formal sentences suitable for a government grievance portal
-- Return ONLY the JSON, no other text
-
-Grievance text: "${text}"
-Current location: lat=${lat || "unknown"}, lng=${lng || "unknown"}, ward="${ward || "unknown"}", zone="${zone || "unknown"}"`;
+  const userMessage = [
+    "Citizen grievance:",
+    citizenText,
+    "",
+    "Location context from citizen device:",
+    `- latitude: ${ctx.lat ?? "not provided"}`,
+    `- longitude: ${ctx.lng ?? "not provided"}`,
+    `- ward: ${ctx.ward ?? "not provided"}`,
+    `- zone: ${ctx.zone ?? "not provided"}`,
+    "",
+    "Classify this specific complaint and return the JSON schema described in the system prompt.",
+  ].join("\n");
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -246,10 +186,13 @@ Current location: lat=${lat || "unknown"}, lng=${lng || "unknown"}, ward="${ward
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.3,
-      max_tokens: 800,
+      model,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userMessage },
+      ],
+      temperature: 0.2,
+      max_tokens: 900,
       response_format: { type: "json_object" },
     }),
   });
@@ -261,42 +204,51 @@ Current location: lat=${lat || "unknown"}, lng=${lng || "unknown"}, ward="${ward
 
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("No content from OpenAI");
-  return JSON.parse(content) as AnalysisResult;
+  if (!content || typeof content !== "string") {
+    throw new Error("No content from OpenAI");
+  }
+
+  const parsed = JSON.parse(content) as Partial<AnalysisResult>;
+  return normalizeAnalysis(parsed, ctx);
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { text, lat, lng, ward, zone, audioTranscript } = body;
+    const { text, transcript, lat, lng, ward, zone } = body;
 
-    const inputText = (text || audioTranscript || "").trim();
-    if (!inputText || inputText.length < 5) {
+    const citizenText = (text || transcript || "").trim();
+    if (!citizenText || citizenText.length < 5) {
       return NextResponse.json(
         { error: "Please provide a grievance description of at least 5 characters." },
         { status: 400 }
       );
     }
 
-    const openaiKey = process.env.OPENAI_API_KEY;
+    const locationCtx: LocationContext = { lat, lng, ward, zone };
+    const openaiKey = process.env.OPENAI_API_KEY?.trim();
+
     let result: AnalysisResult;
+    let modelUsed: string;
 
     if (openaiKey) {
       try {
-        result = await openAIAnalysis(inputText, lat, lng, ward, zone, openaiKey);
+        result = await openAIAnalysis(citizenText, locationCtx, openaiKey);
+        modelUsed = process.env.OPENAI_MODEL || "gpt-4o-mini";
       } catch (err) {
-        console.error("OpenAI failed, falling back to heuristic:", err);
-        result = heuristicAnalysis(inputText, lat, lng, ward, zone);
+        console.error("OpenAI failed, falling back to water-supply mock:", err);
+        result = waterSupplyMockFallback(locationCtx);
+        modelUsed = "water-supply-mock-fallback";
       }
     } else {
-      // No API key — use fast local heuristic
-      result = heuristicAnalysis(inputText, lat, lng, ward, zone);
+      result = waterSupplyMockFallback(locationCtx);
+      modelUsed = "water-supply-mock-fallback";
     }
 
     return NextResponse.json({
       ...result,
       processedAt: new Date().toISOString(),
-      model: openaiKey ? "gpt-4o-mini" : "local-heuristic",
+      model: modelUsed,
     });
   } catch (err) {
     console.error("analyze-grievance error:", err);
@@ -308,10 +260,14 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
+  const hasKey = Boolean(process.env.OPENAI_API_KEY?.trim());
   return NextResponse.json({
     status: "ok",
     service: "AI CPGRAMS Grievance Analyzer",
-    version: "1.0",
-    models: ["gpt-4o-mini (if OPENAI_API_KEY set)", "local-heuristic (fallback)"],
+    version: "1.1",
+    openai_configured: hasKey,
+    models: hasKey
+      ? [process.env.OPENAI_MODEL || "gpt-4o-mini"]
+      : ["water-supply-mock-fallback (OPENAI_API_KEY not set)"],
   });
 }
