@@ -21,10 +21,19 @@
   margin: 0;
 }
 
-html,
+html {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 body {
+  min-height: 100%;
   max-width: 100vw;
   overflow-x: hidden;
+  overflow-y: auto;
+  touch-action: pan-y;
   background-color: #f0f4f8;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }

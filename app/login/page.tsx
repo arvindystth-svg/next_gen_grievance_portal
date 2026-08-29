@@ -76,7 +76,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-slate-100 overflow-y-auto overscroll-contain">
+    <>
       <header className="bg-[#1a3c6e] text-white shadow-lg sticky top-0 z-10">
         <div className="h-1 bg-[#f97316]" />
         <div className="max-w-md mx-auto px-4 py-4 text-center">
@@ -203,6 +203,6 @@ export default function LoginPage() {
           Demo portal only. OTP verification is simulated for the five test citizens above.
         </p>
       </main>
-    </div>
+    </>
   );
 }
