@@ -42,12 +42,11 @@ export default function DepartmentSelector({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const toggle = (dept: string) => {
-    if (selected.includes(dept)) {
-      onChange(selected.filter((d) => d !== dept));
-    } else {
+  const addSelection = (dept: string) => {
+    if (!selected.includes(dept)) {
       onChange([...selected, dept]);
     }
+    setQuery("");
   };
 
   const remove = (dept: string, e: React.MouseEvent) => {
@@ -130,10 +129,10 @@ export default function DepartmentSelector({
                   <li key={dept}>
                     <button
                       type="button"
-                      onClick={() => toggle(dept)}
+                      onClick={() => addSelection(dept)}
                       className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors ${
                         isSelected
-                          ? "bg-blue-50 text-blue-800"
+                          ? "bg-blue-50 text-blue-800 cursor-default"
                           : "text-slate-700 hover:bg-slate-50"
                       }`}
                     >
