@@ -127,7 +127,7 @@ export default function DraftPanel({ draft, onResume, onDiscard }: DraftPanelPro
           <button
             type="button"
             onClick={onResume}
-            className="flex-1 bg-[#1a3c6e] hover:bg-[#2563eb] text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+            className="flex-1 bg-[#1a3c6e] hover:bg-[#2563eb] text-white text-sm font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5"
           >
             <Play size={16} />
             {t("draft.resume")}
@@ -135,7 +135,7 @@ export default function DraftPanel({ draft, onResume, onDiscard }: DraftPanelPro
           <button
             type="button"
             onClick={onDiscard}
-            className="px-4 py-3 border-2 border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
+            className="px-3 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5"
           >
             <Trash2 size={16} />
             {t("draft.discard")}

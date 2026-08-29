@@ -191,7 +191,7 @@ export default function Header({
                     setDrawerOpen(false);
                     onLogout();
                   }}
-                  className="w-full border-2 border-slate-200 text-slate-600 py-2.5 rounded-xl font-medium hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+                  className="w-full border border-slate-200 text-slate-600 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5"
                 >
                   <LogOut size={16} />
                   Log out
@@ -199,7 +199,7 @@ export default function Header({
               )}
               <button
                 onClick={() => setDrawerOpen(false)}
-                className="w-full bg-[#1a3c6e] text-white py-2.5 rounded-xl font-medium hover:bg-[#2563eb] transition-colors"
+                className="w-full bg-[#1a3c6e] text-white py-2 rounded-lg text-sm font-medium hover:bg-[#2563eb] transition-colors"
               >
                 {t("app.close")}
               </button>

@@ -23,6 +23,7 @@ import { TranslationKey } from "@/lib/i18n";
 
 interface ComplaintHistoryProps {
   complaints: ComplaintRecord[];
+  ownerId: string;
   onUpdate: (complaints: ComplaintRecord[]) => void;
 }
 
@@ -195,11 +196,11 @@ function ComplaintCard({
   );
 }
 
-export default function ComplaintHistory({ complaints, onUpdate }: ComplaintHistoryProps) {
+export default function ComplaintHistory({ complaints, ownerId, onUpdate }: ComplaintHistoryProps) {
   const { t } = useLanguage();
 
   const handleFeedback = (id: string, rating: number) => {
-    const updated = updateComplaintFeedback(id, rating);
+    const updated = updateComplaintFeedback(id, rating, ownerId);
     onUpdate(updated);
   };
 

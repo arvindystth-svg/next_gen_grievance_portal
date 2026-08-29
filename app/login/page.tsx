@@ -115,7 +115,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={handleSendOtp}
-              className="w-full bg-[#1a3c6e] hover:bg-[#2563eb] text-white font-bold py-3 rounded-xl transition-colors"
+              className="w-full bg-[#1a3c6e] hover:bg-[#2563eb] text-white text-sm font-semibold py-2 rounded-lg transition-colors"
             >
               Send OTP
             </button>
@@ -143,7 +143,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={handleVerify}
                 disabled={loading || otp.length !== 6}
-                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white text-sm font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5"
               >
                 {loading ? <Loader2 size={18} className="animate-spin" /> : <ChevronRight size={18} />}
                 Verify &amp; continue
@@ -181,7 +181,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => fillDemo(citizen.mobile, citizen.otp)}
-                  className="w-full text-left px-5 py-3 hover:bg-blue-50 transition-colors flex items-center gap-3"
+                  className="w-full text-left px-4 py-2.5 hover:bg-blue-50 transition-colors flex items-center gap-3"
                 >
                   <div className="w-9 h-9 rounded-full bg-[#1a3c6e]/10 text-[#1a3c6e] flex items-center justify-center font-bold text-sm">
                     <User size={16} />

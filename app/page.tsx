@@ -214,7 +214,7 @@ function StepBackButton({ label, onClick }: { label: string; onClick: () => void
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-[#1a3c6e] font-medium transition-colors"
+      className="flex items-center gap-1 text-xs text-slate-500 hover:text-[#1a3c6e] font-medium transition-colors"
     >
       <ChevronLeft size={16} />
       {label}
@@ -390,7 +390,7 @@ function HomeContent() {
 
   useEffect(() => {
     if (!authReady || !ownerId) return;
-    setComplaints(getComplaintHistory());
+    setComplaints(getComplaintHistory(ownerId));
     refreshSavedDraft();
     draftReadyRef.current = true;
   }, [authReady, ownerId, refreshSavedDraft]);
@@ -864,6 +864,7 @@ function HomeContent() {
     if (analysisResult) {
       const record: ComplaintRecord = {
         id,
+        ownerId,
         raisedAt: new Date().toISOString(),
         rawText: grievanceText,
         aiSummary: editedSummary + formatSupplementalForSummary(scoringSupplemental),
@@ -877,7 +878,7 @@ function HomeContent() {
         ward: selectedArea?.ward || location?.ward || analysisResult.location.ward,
         locality: selectedArea?.locality || location?.locality || analysisResult.location.locality,
       };
-      setComplaints(saveComplaintToHistory(record));
+      setComplaints(saveComplaintToHistory(record, ownerId));
     }
 
     setSubmittedId(id);
@@ -960,25 +961,25 @@ function HomeContent() {
                 if (step === 5) handleReset();
                 setActiveView("file");
               }}
-              className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[11px] font-semibold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1 py-1 rounded-md text-[10px] font-medium transition-all ${
                 activeView === "file"
                   ? "bg-white text-[#1a3c6e] shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              <PlusCircle size={13} />
+              <PlusCircle size={12} />
               <span className="truncate">{t("tab.file")}</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveView("draft")}
-              className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[11px] font-semibold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1 py-1 rounded-md text-[10px] font-medium transition-all ${
                 activeView === "draft"
                   ? "bg-white text-[#1a3c6e] shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              <FileText size={13} />
+              <FileText size={12} />
               <span className="truncate">{t("tab.draft")}</span>
               {savedDraft && (
                 <span className="bg-amber-500 text-white text-[9px] font-bold px-1 py-0 rounded-full min-w-[14px] text-center">
@@ -989,13 +990,13 @@ function HomeContent() {
             <button
               type="button"
               onClick={() => setActiveView("history")}
-              className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[11px] font-semibold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1 py-1 rounded-md text-[10px] font-medium transition-all ${
                 activeView === "history"
                   ? "bg-white text-[#1a3c6e] shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              <History size={13} />
+              <History size={12} />
               <span className="truncate">{t("tab.history")}</span>
               {complaints.length > 0 && (
                 <span className="bg-[#1a3c6e] text-white text-[9px] font-bold px-1 py-0 rounded-full min-w-[14px] text-center">
@@ -1035,6 +1036,7 @@ function HomeContent() {
         {activeView === "history" && (
           <ComplaintHistory
             complaints={complaints}
+            ownerId={ownerId}
             onUpdate={setComplaints}
           />
         )}
@@ -1091,7 +1093,7 @@ function HomeContent() {
               type="button"
               onClick={handleContinueFromDescribe}
               disabled={isAnalyzing || !grievanceText.trim() || grievanceText.trim().length < 10}
-              className="w-full bg-[#1a3c6e] hover:bg-[#2563eb] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+              className="w-full bg-[#1a3c6e] hover:bg-[#2563eb] disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-sm font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5"
             >
               <Sparkles size={18} />
               {canSkipReanalysis() ? t("describe.continueReview") : t("describe.continueAnalysis")}
@@ -1198,7 +1200,7 @@ function HomeContent() {
             <div className="flex gap-3">
               <button
                 onClick={() => goToStep(1)}
-                className="flex items-center gap-2 px-5 py-3 border-2 border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-medium transition-colors"
+                className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors"
               >
                 <ChevronLeft size={16} />
                 {t("action.back")}
@@ -1206,7 +1208,7 @@ function HomeContent() {
               <button
                 onClick={handleContinueToSummary}
                 disabled={selectedLocalDepartments.length === 0}
-                className="flex-1 bg-[#1a3c6e] hover:bg-[#2563eb] disabled:bg-slate-300 text-white font-bold py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+                className="flex-1 bg-[#1a3c6e] hover:bg-[#2563eb] disabled:bg-slate-300 text-white text-sm font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5"
               >
                 {t("action.continueSummary")}
                 <ChevronRight size={18} />
@@ -1250,7 +1252,7 @@ function HomeContent() {
             <div className="flex gap-3">
               <button
                 onClick={() => goToStep(3)}
-                className="flex items-center gap-2 px-5 py-3 border-2 border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-medium transition-colors"
+                className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors"
               >
                 <ChevronLeft size={16} />
                 {t("action.back")}
@@ -1258,7 +1260,7 @@ function HomeContent() {
               <button
                 onClick={handleSubmit}
                 disabled={isSubmitting || selectedLocalDepartments.length === 0 || !selectedArea}
-                className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white font-bold py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+                className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white text-sm font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5"
               >
                 {isSubmitting ? (
                   <>
@@ -1388,7 +1390,7 @@ function HomeContent() {
                     a.download = `${submittedId}.txt`;
                     a.click();
                   }}
-                  className="flex items-center gap-2 px-4 py-3 border-2 border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-medium text-sm transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-xs font-medium transition-colors"
                 >
                   <Download size={14} />
                   {t("success.download")}
@@ -1398,14 +1400,14 @@ function HomeContent() {
                     handleReset();
                     setActiveView("history");
                   }}
-                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-[#1a3c6e] font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-[#1a3c6e] text-sm font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5"
                 >
                   <History size={16} />
                   {t("success.viewHistory")}
                 </button>
                 <button
                   onClick={handleReset}
-                  className="flex-1 bg-[#1a3c6e] hover:bg-[#2563eb] text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 bg-[#1a3c6e] hover:bg-[#2563eb] text-white text-sm font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5"
                 >
                   <RotateCcw size={16} />
                   {t("success.fileAnother")}
