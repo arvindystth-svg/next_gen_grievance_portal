@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Phone, Shield, Loader2, ChevronRight, User } from "lucide-react";
 import {
@@ -22,7 +22,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const session = loadCitizenSession();
     if (session?.mobile) {
       redirectToHome(router);
@@ -56,7 +56,7 @@ export default function LoginPage() {
     setLoading(true);
     await new Promise((r) => setTimeout(r, 600));
     saveCitizenSession(citizen);
-    router.replace("/");
+    redirectToHome(router);
   };
 
   const fillDemo = (demoMobile: string, demoOtp: string) => {

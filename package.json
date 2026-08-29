@@ -4,8 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:clean": "rm -rf .next && next dev",
     "build": "next build",
     "start": "next start",
+    "preview": "npm run build && next start",
     "lint": "next lint"
   },
   "dependencies": {

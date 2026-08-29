@@ -1,19 +1,21 @@
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
-export function redirectToLogin(router: AppRouterInstance): void {
-  router.replace("/login");
-  window.setTimeout(() => {
-    if (window.location.pathname !== "/login") {
-      window.location.assign("/login");
-    }
-  }, 500);
+/**
+ * Hard navigation is more reliable than client router alone after a full page refresh
+ * (preview iframe, stale HMR, etc.). Router replace is still attempted for SPA transitions.
+ */
+export function redirectToLogin(router?: AppRouterInstance): void {
+  if (typeof window === "undefined") return;
+  router?.replace("/login");
+  if (window.location.pathname !== "/login") {
+    window.location.replace("/login");
+  }
 }
 
-export function redirectToHome(router: AppRouterInstance): void {
-  router.replace("/");
-  window.setTimeout(() => {
-    if (window.location.pathname === "/login") {
-      window.location.assign("/");
-    }
-  }, 500);
+export function redirectToHome(router?: AppRouterInstance): void {
+  if (typeof window === "undefined") return;
+  router?.replace("/");
+  if (window.location.pathname === "/login") {
+    window.location.replace("/");
+  }
 }

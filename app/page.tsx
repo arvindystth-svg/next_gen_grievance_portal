@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import VoiceTextRecorder from "@/components/VoiceTextRecorder";
@@ -380,20 +380,16 @@ function HomeContent() {
     redirectToLogin(router);
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const session = loadCitizenSession();
     if (!session?.mobile) {
       setAuthStatus("unauthenticated");
+      redirectToLogin(router);
       return;
     }
     setCitizen(session);
     setAuthStatus("authenticated");
-  }, []);
-
-  useEffect(() => {
-    if (authStatus !== "unauthenticated") return;
-    redirectToLogin(router);
-  }, [authStatus, router]);
+  }, [router]);
 
   useEffect(() => {
     if (authStatus !== "authenticated" || !ownerId) return;
@@ -927,9 +923,15 @@ function HomeContent() {
 
   if (authStatus === "unauthenticated" || !citizen) {
     return (
-      <div className="h-dvh flex flex-col items-center justify-center bg-slate-100 gap-3">
-        <Loader2 className="animate-spin text-[#1a3c6e]" size={28} />
-        <p className="text-sm text-slate-600">Redirecting to login…</p>
+      <div className="min-h-dvh flex flex-col items-center justify-center bg-slate-100 gap-4 p-6 text-center">
+        <p className="text-sm text-slate-600">Sign in to access the grievance portal.</p>
+        <a
+          href="/login"
+          className="inline-flex items-center gap-1.5 rounded-md bg-[#1a3c6e] px-4 py-2 text-sm font-medium text-white hover:bg-[#15325c]"
+        >
+          Go to login
+          <ChevronRight size={16} />
+        </a>
       </div>
     );
   }
