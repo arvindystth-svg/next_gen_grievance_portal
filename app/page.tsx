@@ -436,10 +436,23 @@ export default function Home() {
   };
 
   const applySelectedArea = (
-    area: { ward: string; zone: string; locality: string },
+    area: { ward: string; zone: string; locality: string } | null,
     manual = false,
     autoFilled = false
   ) => {
+    if (!area) {
+      if (manual) areaManuallySet.current = false;
+      setSelectedArea(null);
+      setGeocodeFailed(true);
+      setSupplementalDetails((prev) => {
+        const next = { ...prev };
+        delete next.ward;
+        return next;
+      });
+      setAutoFilledDetails((prev) => ({ ...prev, ward: false }));
+      return;
+    }
+
     if (manual) areaManuallySet.current = true;
     setSelectedArea(area);
     setGeocodeFailed(false);
@@ -868,7 +881,6 @@ export default function Home() {
             </div>
 
             {completenessReport && (
-              <div id="completeness-section">
                 <CompletenessCard
                   report={completenessReport}
                   supplementalDetails={supplementalDetails}
@@ -879,7 +891,6 @@ export default function Home() {
                   onWardAreaChange={(area) => applySelectedArea(area, true)}
                   onFixField={handleFixCompletenessField}
                 />
-              </div>
             )}
 
             {/* Duplicate banner */}

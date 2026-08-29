@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, ChevronRight, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Sparkles } from "lucide-react";
 import {
   CompletenessReport,
   SupplementalDetailId,
@@ -17,7 +18,7 @@ interface CompletenessCardProps {
   selectedArea?: { ward: string; zone: string; locality: string } | null;
   onDetailChange: (id: SupplementalDetailId, value: string) => void;
   onDetailBlur?: (id: SupplementalDetailId, value: string) => void;
-  onWardAreaChange?: (area: { ward: string; zone: string; locality: string }) => void;
+  onWardAreaChange?: (area: { ward: string; zone: string; locality: string } | null) => void;
   onFixField?: (fieldId: string) => void;
 }
 
@@ -66,9 +67,19 @@ export default function CompletenessCard({
     return true;
   });
 
+  const [expanded, setExpanded] = useState(false);
+  const missingLabels = missing.map((f) => f.label);
+  const collapsedSummary =
+    score >= 100
+      ? "All key details captured"
+      : missingLabels.length > 0
+      ? `Needs: ${missingLabels.slice(0, 3).join(", ")}${missingLabels.length > 3 ? "…" : ""}`
+      : "Some details still needed";
+
   return (
     <div
-      className={`rounded-2xl border overflow-hidden ${
+      id="completeness-section"
+      className={`rounded-xl border overflow-hidden ${
         score >= 100
           ? "bg-green-50 border-green-200"
           : score >= 70
@@ -76,26 +87,51 @@ export default function CompletenessCard({
           : "bg-red-50 border-red-200"
       }`}
     >
-      <div className="px-5 py-4 border-b border-inherit">
-        <div className="flex items-center justify-between gap-4 mb-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full px-3 py-2.5 flex items-start gap-2 text-left hover:bg-white/40 transition-colors"
+      >
+        <ClipboardList size={14} className="text-blue-500 mt-0.5 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">
               Complaint Completeness
             </p>
-            <p className="text-sm text-slate-700 mt-0.5">
-              {score >= 100
-                ? "All key details captured — continue to summary."
-                : "Fill missing details below. Values auto-filled from your complaint can be changed."}
-            </p>
-          </div>
-          <div className="text-center flex-shrink-0">
-            <div className={`text-3xl font-black transition-all duration-300 ${scoreColor(score)}`}>
-              {score}%
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="text-right">
+                <div className={`text-lg font-black leading-none ${scoreColor(score)}`}>{score}%</div>
+                <div className="text-[9px] text-slate-500 uppercase tracking-wider">Complete</div>
+              </div>
+              <ChevronDown
+                size={14}
+                className={`text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`}
+              />
             </div>
-            <div className="text-[10px] text-slate-500 uppercase tracking-wider">Complete</div>
           </div>
+          {!expanded && (
+            <div className="mt-1.5 space-y-1.5">
+              <p className="text-[11px] text-slate-600 line-clamp-2">{collapsedSummary}</p>
+              <div className="h-1.5 bg-white/70 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${barColor(score)}`}
+                  style={{ width: `${score}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
-        <div className="h-2.5 bg-white/70 rounded-full overflow-hidden">
+      </button>
+
+      {expanded && (
+        <>
+      <div className="px-5 py-3 border-t border-inherit bg-white/50">
+        <p className="text-sm text-slate-700">
+          {score >= 100
+            ? "All key details captured — continue to summary."
+            : "Fill missing details below. Values auto-filled from your complaint can be changed."}
+        </p>
+        <div className="h-2.5 bg-white/70 rounded-full overflow-hidden mt-3">
           <div
             className={`h-full rounded-full transition-all duration-500 ${barColor(score)}`}
             style={{ width: `${score}%` }}
@@ -149,6 +185,8 @@ export default function CompletenessCard({
                   <div onMouseDown={(e) => e.stopPropagation()}>
                     {detailId === "ward" && onWardAreaChange ? (
                       <WardAreaSelector
+                        compact
+                        hideLabel
                         value={selectedArea ?? null}
                         onChange={(area) => onWardAreaChange(area)}
                       />
@@ -248,6 +286,8 @@ export default function CompletenessCard({
             ))}
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

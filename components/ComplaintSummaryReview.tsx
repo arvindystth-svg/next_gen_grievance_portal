@@ -12,7 +12,7 @@ interface ComplaintSummaryReviewProps {
   cpgramsCategories: string[];
   selectedArea: { ward: string; zone: string; locality: string } | null;
   areaAutoFilled: boolean;
-  onAreaChange: (area: { ward: string; zone: string; locality: string }) => void;
+  onAreaChange: (area: { ward: string; zone: string; locality: string } | null) => void;
   onEditReview: () => void;
 }
 

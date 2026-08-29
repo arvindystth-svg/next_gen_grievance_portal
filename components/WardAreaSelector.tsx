@@ -2,15 +2,23 @@
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Search, MapPin } from "lucide-react";
+import { Search, ChevronDown, X, Check, MapPin } from "lucide-react";
 import { BengaluruWard, formatWardLabel, searchWards, wardToArea } from "@/lib/bengaluruAreas";
 
-interface WardAreaSelectorProps {
-  value: { ward: string; zone: string; locality: string } | null;
-  onChange: (area: { ward: string; zone: string; locality: string }) => void;
+export interface WardAreaValue {
+  ward: string;
+  zone: string;
+  locality: string;
 }
 
-function formatSelectedValue(value: { ward: string; zone: string; locality: string }): string {
+interface WardAreaSelectorProps {
+  value: WardAreaValue | null;
+  onChange: (area: WardAreaValue | null) => void;
+  compact?: boolean;
+  hideLabel?: boolean;
+}
+
+function formatSelectedValue(value: WardAreaValue): string {
   return `${value.locality} · ${value.ward} (${value.zone})`;
 }
 
@@ -21,14 +29,19 @@ interface DropdownPosition {
   maxHeight: number;
 }
 
-export default function WardAreaSelector({ value, onChange }: WardAreaSelectorProps) {
+export default function WardAreaSelector({
+  value,
+  onChange,
+  compact = false,
+  hideLabel = false,
+}: WardAreaSelectorProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [dropdownPos, setDropdownPos] = useState<DropdownPosition | null>(null);
   const [mounted, setMounted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const results = useMemo(() => searchWards(query, 20), [query]);
 
@@ -37,18 +50,12 @@ export default function WardAreaSelector({ value, onChange }: WardAreaSelectorPr
   }, []);
 
   useEffect(() => {
-    if (value && !open) {
-      setQuery(formatSelectedValue(value));
-    }
-  }, [value, open]);
-
-  useEffect(() => {
     setHighlightIndex(0);
   }, [query, results.length]);
 
   const updateDropdownPosition = useCallback(() => {
-    if (!inputRef.current) return;
-    const rect = inputRef.current.getBoundingClientRect();
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom - 12;
     const spaceAbove = rect.top - 12;
     const preferredHeight = 280;
@@ -85,53 +92,42 @@ export default function WardAreaSelector({ value, onChange }: WardAreaSelectorPr
         return;
       }
       setOpen(false);
-      if (value) {
-        setQuery(formatSelectedValue(value));
-      } else {
-        setQuery("");
-      }
+      setQuery("");
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [value]);
+  }, []);
 
   const selectWard = (ward: BengaluruWard) => {
     const area = wardToArea(ward);
-    onChange(area);
-    setQuery(formatWardLabel(ward));
+    const isSame = value?.ward === area.ward && value?.locality === area.locality;
+    if (!isSame) {
+      onChange(area);
+    }
+    setQuery("");
     setOpen(false);
   };
 
-  const handleInputChange = (next: string) => {
-    setQuery(next);
-    setOpen(true);
-  };
-
-  const handleFocus = () => {
-    setOpen(true);
-    if (value) {
-      setQuery("");
-    }
+  const clearSelection = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange(null);
+    setQuery("");
+    setOpen(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!open && (e.key === "ArrowDown" || e.key === "Enter")) {
-      setOpen(true);
-      return;
-    }
-
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setHighlightIndex((i) => Math.min(i + 1, results.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setHighlightIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter" && open && results[highlightIndex]) {
+    } else if (e.key === "Enter" && results[highlightIndex]) {
       e.preventDefault();
       selectWard(results[highlightIndex]);
     } else if (e.key === "Escape") {
       setOpen(false);
-      if (value) setQuery(formatSelectedValue(value));
+      setQuery("");
     }
   };
 
@@ -153,6 +149,18 @@ export default function WardAreaSelector({ value, onChange }: WardAreaSelectorPr
           zIndex: 9999,
         }}
       >
+        <div className="p-2 border-b border-slate-100">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type ward number, locality, or area…"
+            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+            autoFocus
+            autoComplete="off"
+          />
+        </div>
         <div className="px-3 py-2 border-b border-slate-100 bg-slate-50">
           <p className="text-[11px] text-slate-500">
             {query.trim()
@@ -163,7 +171,7 @@ export default function WardAreaSelector({ value, onChange }: WardAreaSelectorPr
         <ul
           id={listboxId}
           className="overflow-y-auto py-1"
-          style={{ maxHeight: dropdownPos.maxHeight - 40 }}
+          style={{ maxHeight: dropdownPos.maxHeight - 88 }}
           role="listbox"
         >
           {results.length === 0 ? (
@@ -184,11 +192,22 @@ export default function WardAreaSelector({ value, onChange }: WardAreaSelectorPr
                     onMouseEnter={() => setHighlightIndex(index)}
                     onClick={() => selectWard(ward)}
                     className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-3 ${
-                      isActive ? "bg-blue-50 text-blue-900" : "text-slate-700 hover:bg-blue-50"
+                      isSelected
+                        ? "bg-blue-50 text-blue-800 cursor-default"
+                        : isActive
+                        ? "bg-blue-50 text-blue-900"
+                        : "text-slate-700 hover:bg-blue-50"
                     }`}
                   >
+                    <span
+                      className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+                        isSelected ? "bg-blue-600 border-blue-600" : "border-slate-300 bg-white"
+                      }`}
+                    >
+                      {isSelected && <Check size={10} className="text-white" />}
+                    </span>
                     {wardNumber && (
-                      <span className="flex-shrink-0 w-9 h-9 rounded-lg bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">
+                      <span className="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">
                         {wardNumber}
                       </span>
                     )}
@@ -210,38 +229,53 @@ export default function WardAreaSelector({ value, onChange }: WardAreaSelectorPr
 
   return (
     <div ref={containerRef} className="relative">
-      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">
-        Ward &amp; Locality
-      </label>
-      <p className="text-[11px] text-slate-400 mb-2">
-        Search by ward number, locality, or area name.
-      </p>
+      {!hideLabel && (
+        <>
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">
+            Ward &amp; Locality
+          </label>
+          <p className="text-[11px] text-slate-400 mb-2">
+            Search by ward number, locality, or area name.
+          </p>
+        </>
+      )}
 
-      <div className="relative">
-        <Search
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`w-full flex items-center gap-2 text-sm border-2 border-slate-200 rounded-xl bg-white hover:border-blue-300 focus:outline-none focus:border-blue-500 transition-colors text-left ${
+          compact ? "px-2.5 py-2 min-h-[38px]" : "px-3 py-2.5 min-h-[44px]"
+        }`}
+      >
+        <Search size={14} className="text-slate-400 flex-shrink-0" />
+        <div className="flex-1 flex flex-wrap items-center gap-1.5 min-w-0">
+          {!value ? (
+            <span className="text-slate-400">e.g. 80, Koramangala, Whitefield…</span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border max-w-full bg-blue-100 text-blue-700 border-blue-200">
+              <MapPin size={10} className="flex-shrink-0" />
+              <span className="truncate">{formatSelectedValue(value)}</span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={clearSelection}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") clearSelection(e as unknown as React.MouseEvent);
+                }}
+                className="hover:opacity-70 flex-shrink-0"
+                aria-label="Clear selected ward"
+              >
+                <X size={10} />
+              </span>
+            </span>
+          )}
+        </div>
+        <ChevronDown
           size={14}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+          className={`text-slate-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
         />
-        <MapPin
-          size={14}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none"
-        />
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onChange={(e) => handleInputChange(e.target.value)}
-          onFocus={handleFocus}
-          onKeyDown={handleKeyDown}
-          placeholder="e.g. 80, Koramangala, Whitefield…"
-          className="w-full pl-9 pr-9 py-2.5 text-sm border-2 border-slate-200 rounded-xl bg-white hover:border-blue-300 focus:outline-none focus:border-blue-500 transition-colors text-slate-800 placeholder:text-slate-400"
-          autoComplete="off"
-          role="combobox"
-          aria-expanded={open}
-          aria-controls={listboxId}
-          aria-autocomplete="list"
-        />
-      </div>
+      </button>
 
       {dropdown}
     </div>
