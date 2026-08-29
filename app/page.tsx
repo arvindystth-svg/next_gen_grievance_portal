@@ -9,7 +9,7 @@ import ComplaintHistory from "@/components/ComplaintHistory";
 import CompletenessCard from "@/components/CompletenessCard";
 import DepartmentSelector from "@/components/DepartmentSelector";
 import WardAreaSelector from "@/components/WardAreaSelector";
-import { assessComplaintCompleteness } from "@/lib/complaintCompleteness";
+import { assessComplaintCompleteness, SupplementalDetailId, SupplementalDetails, formatSupplementalForSummary } from "@/lib/complaintCompleteness";
 import { extractAreaFromText } from "@/lib/bengaluruAreas";
 import {
   LOCAL_DEPARTMENTS,
@@ -244,6 +244,8 @@ export default function Home() {
     zone: string;
     locality: string;
   } | null>(null);
+  const [enabledDetails, setEnabledDetails] = useState<Partial<Record<SupplementalDetailId, boolean>>>({});
+  const [supplementalDetails, setSupplementalDetails] = useState<SupplementalDetails>({});
 
   useEffect(() => {
     setComplaints(getComplaintHistory());
@@ -316,6 +318,16 @@ export default function Home() {
     setStep(target);
   };
 
+  const effectiveSupplemental = useMemo(() => {
+    const result: SupplementalDetails = {};
+    (Object.keys(supplementalDetails) as SupplementalDetailId[]).forEach((key) => {
+      if (enabledDetails[key] && supplementalDetails[key]?.trim()) {
+        result[key] = supplementalDetails[key];
+      }
+    });
+    return result;
+  }, [enabledDetails, supplementalDetails]);
+
   const completenessReport = useMemo(() => {
     if (!analysisResult) return null;
     return assessComplaintCompleteness({
@@ -324,6 +336,7 @@ export default function Home() {
       location,
       selectedArea,
       selectedLocalDepartments,
+      supplemental: effectiveSupplemental,
       aiMissing: analysisResult.missing_details_advisory.is_missing,
       aiObservation: analysisResult.missing_details_advisory.observation,
     });
@@ -333,8 +346,28 @@ export default function Home() {
     location,
     selectedArea,
     selectedLocalDepartments,
+    effectiveSupplemental,
     analysisResult,
   ]);
+
+  const handleToggleDetail = (id: SupplementalDetailId, enabled: boolean) => {
+    setEnabledDetails((prev) => ({ ...prev, [id]: enabled }));
+    if (!enabled) {
+      setSupplementalDetails((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
+  };
+
+  const handleDetailChange = (id: SupplementalDetailId, value: string) => {
+    setSupplementalDetails((prev) => ({ ...prev, [id]: value }));
+    if (id === "ward" && value.trim().length >= 3) {
+      const extracted = extractAreaFromText(value);
+      if (extracted) applySelectedArea(extracted);
+    }
+  };
 
   const applySelectedArea = (area: { ward: string; zone: string; locality: string }, manual = false) => {
     if (manual) areaManuallySet.current = true;
@@ -357,6 +390,10 @@ export default function Home() {
   const handleFixCompletenessField = (fieldId: string) => {
     if (fieldId === "description") {
       goToStep(1);
+      return;
+    }
+    if (fieldId === "departments") {
+      document.getElementById("routing-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     if (fieldId === "ward" || fieldId === "landmark") {
@@ -491,7 +528,7 @@ export default function Home() {
         id,
         raisedAt: new Date().toISOString(),
         rawText: grievanceText,
-        aiSummary: editedSummary,
+        aiSummary: editedSummary + formatSupplementalForSummary(effectiveSupplemental),
         status: "Submitted",
         localDepartments: selectedLocalDepartments.length
           ? selectedLocalDepartments
@@ -527,6 +564,8 @@ export default function Home() {
     setSelectedLocalDepartments([]);
     setSelectedCpgramsCategories([]);
     setSelectedArea(null);
+    setEnabledDetails({});
+    setSupplementalDetails({});
     areaManuallySet.current = false;
     setMaxStepReached(1);
     lastAutoRoutedSummary.current = null;
@@ -703,6 +742,10 @@ export default function Home() {
             {completenessReport && (
               <CompletenessCard
                 report={completenessReport}
+                enabledDetails={enabledDetails}
+                supplementalDetails={supplementalDetails}
+                onToggleDetail={handleToggleDetail}
+                onDetailChange={handleDetailChange}
                 onFixField={handleFixCompletenessField}
               />
             )}
@@ -785,7 +828,7 @@ export default function Home() {
               )}
 
               {/* Routing — editable inline selectors */}
-              <div className="space-y-4 pt-4 border-t border-slate-100">
+              <div id="routing-section" className="space-y-4 pt-4 border-t border-slate-100">
                 <div className="flex items-center gap-1">
                   <Tag size={12} className="text-slate-500" />
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">

@@ -4,6 +4,7 @@ export interface CompletenessField {
   fillHint: string;
   completed: boolean;
   weight: number;
+  interactive?: boolean;
 }
 
 export interface CompletenessReport {
@@ -12,6 +13,42 @@ export interface CompletenessReport {
   missing: CompletenessField[];
   completed: CompletenessField[];
 }
+
+export type SupplementalDetailId =
+  | "description"
+  | "ward"
+  | "landmark"
+  | "timeline"
+  | "consumer_id";
+
+export type SupplementalDetails = Partial<Record<SupplementalDetailId, string>>;
+
+export const DETAIL_INPUT_CONFIG: Record<
+  SupplementalDetailId,
+  { placeholder: string; multiline?: boolean; label: string }
+> = {
+  description: {
+    label: "Issue description",
+    placeholder: "Describe the problem in more detail…",
+    multiline: true,
+  },
+  ward: {
+    label: "Ward / locality",
+    placeholder: "e.g. Koramangala, Ward 151, Indiranagar",
+  },
+  landmark: {
+    label: "Area or landmark",
+    placeholder: "e.g. Near metro station, 10th Main Road, opposite temple",
+  },
+  timeline: {
+    label: "When it started",
+    placeholder: "e.g. For the past 3 days, since Monday morning",
+  },
+  consumer_id: {
+    label: "Consumer / RR number",
+    placeholder: "e.g. BWSSB RR No. 12345678",
+  },
+};
 
 interface LocationInput {
   lat: number;
@@ -34,6 +71,7 @@ interface AssessParams {
   location: LocationInput | null;
   selectedArea: AreaInput | null;
   selectedLocalDepartments: string[];
+  supplemental?: SupplementalDetails;
   aiObservation?: string;
   aiMissing?: boolean;
 }
@@ -63,19 +101,32 @@ const CONSUMER_ID_PATTERNS = [
   /\b(meter|rr)\s*[#:]?\s*\d{4,}/i,
 ];
 
-function combinedText(grievanceText: string, editedSummary: string): string {
-  return `${grievanceText}\n${editedSummary}`.toLowerCase();
+function combinedText(
+  grievanceText: string,
+  editedSummary: string,
+  supplemental?: SupplementalDetails
+): string {
+  const parts = [grievanceText, editedSummary];
+  if (supplemental?.landmark) parts.push(supplemental.landmark);
+  if (supplemental?.timeline) parts.push(supplemental.timeline);
+  if (supplemental?.consumer_id) parts.push(`consumer id ${supplemental.consumer_id}`);
+  if (supplemental?.description) parts.push(supplemental.description);
+  if (supplemental?.ward) parts.push(supplemental.ward);
+  return parts.join("\n").toLowerCase();
 }
 
-function hasLandmark(text: string): boolean {
+function hasLandmark(text: string, supplemental?: SupplementalDetails): boolean {
+  if (supplemental?.landmark && supplemental.landmark.trim().length >= 4) return true;
   return LANDMARK_PATTERNS.some((p) => p.test(text));
 }
 
-function hasTimeline(text: string): boolean {
+function hasTimeline(text: string, supplemental?: SupplementalDetails): boolean {
+  if (supplemental?.timeline && supplemental.timeline.trim().length >= 4) return true;
   return TIMELINE_PATTERNS.some((p) => p.test(text));
 }
 
-function hasConsumerId(text: string): boolean {
+function hasConsumerId(text: string, supplemental?: SupplementalDetails): boolean {
+  if (supplemental?.consumer_id && supplemental.consumer_id.trim().length >= 4) return true;
   return CONSUMER_ID_PATTERNS.some((p) => p.test(text));
 }
 
@@ -88,8 +139,10 @@ function needsUtilityId(departments: string[]): boolean {
 
 function areaConfirmed(
   selectedArea: AreaInput | null,
-  location: LocationInput | null
+  location: LocationInput | null,
+  supplemental?: SupplementalDetails
 ): boolean {
+  if (supplemental?.ward && supplemental.ward.trim().length >= 3) return true;
   const ward = selectedArea?.ward || location?.ward;
   if (!ward) return false;
   const w = ward.toLowerCase();
@@ -97,64 +150,72 @@ function areaConfirmed(
 }
 
 export function assessComplaintCompleteness(params: AssessParams): CompletenessReport {
-  const text = combinedText(params.grievanceText, params.editedSummary);
+  const supplemental = params.supplemental;
+  const text = combinedText(params.grievanceText, params.editedSummary, supplemental);
   const utilityNeeded = needsUtilityId(params.selectedLocalDepartments);
   const fields: CompletenessField[] = [];
 
   fields.push({
     id: "description",
     label: "Issue description",
-    fillHint: "Describe what is wrong, how it affects you, and any safety concerns in Step 1.",
-    completed: params.grievanceText.trim().length >= 20,
+    fillHint: "A clear description of what is wrong and how it affects you.",
+    completed:
+      params.grievanceText.trim().length >= 20 ||
+      Boolean(supplemental?.description && supplemental.description.trim().length >= 15),
     weight: utilityNeeded ? 25 : 28,
+    interactive: true,
   });
 
   fields.push({
     id: "ward",
     label: "Ward & locality",
-    fillHint:
-      "Select the affected ward/locality from the dropdown, or mention the area in your summary so it auto-fills.",
-    completed: areaConfirmed(params.selectedArea, params.location),
+    fillHint: "Which ward or neighbourhood is affected?",
+    completed: areaConfirmed(params.selectedArea, params.location, supplemental),
     weight: utilityNeeded ? 25 : 27,
+    interactive: true,
   });
 
-  const landmarkFromText = hasLandmark(text);
   fields.push({
     id: "landmark",
     label: "Area or landmark",
     fillHint:
       params.aiObservation && params.aiMissing
         ? params.aiObservation
-        : "Mention the affected stretch, landmark, or neighbourhood — a pinpoint pin is optional for area-wide issues.",
-    completed: landmarkFromText || params.aiMissing === false || areaConfirmed(params.selectedArea, params.location),
+        : "A nearby landmark or street helps crews find the spot — optional for area-wide issues.",
+    completed:
+      hasLandmark(text, supplemental) ||
+      params.aiMissing === false ||
+      areaConfirmed(params.selectedArea, params.location, supplemental),
     weight: utilityNeeded ? 15 : 17,
+    interactive: true,
   });
 
   fields.push({
     id: "timeline",
     label: "When the issue started",
-    fillHint: "Mention how long the problem has lasted (e.g. 'for 3 days' or 'since Monday morning').",
-    completed: hasTimeline(text),
+    fillHint: "How long has this problem been going on?",
+    completed: hasTimeline(text, supplemental),
     weight: utilityNeeded ? 10 : 11,
+    interactive: true,
   });
 
   fields.push({
     id: "departments",
     label: "Department routing",
-    fillHint: "Confirm or correct the routed departments so your ticket reaches the right team.",
+    fillHint: "Select the correct department in the Routing section below.",
     completed: params.selectedLocalDepartments.length > 0,
     weight: utilityNeeded ? 15 : 17,
+    interactive: false,
   });
 
-  // Only relevant for water / power complaints (BWSSB, BESCOM, BBMP Electrical)
   if (utilityNeeded) {
     fields.push({
       id: "consumer_id",
       label: "Utility consumer / RR number",
-      fillHint:
-        "Add your BWSSB or BESCOM consumer ID / RR number in the summary so the utility can locate your connection.",
-      completed: hasConsumerId(text),
+      fillHint: "Your BWSSB or BESCOM connection number helps locate your supply line.",
+      completed: hasConsumerId(text, supplemental),
       weight: 10,
+      interactive: true,
     });
   }
 
@@ -165,4 +226,15 @@ export function assessComplaintCompleteness(params: AssessParams): CompletenessR
   );
 
   return { score, fields, missing, completed };
+}
+
+export function formatSupplementalForSummary(details: SupplementalDetails): string {
+  const lines: string[] = [];
+  if (details.landmark?.trim()) lines.push(`Landmark/area: ${details.landmark.trim()}`);
+  if (details.timeline?.trim()) lines.push(`Duration: ${details.timeline.trim()}`);
+  if (details.ward?.trim()) lines.push(`Affected area: ${details.ward.trim()}`);
+  if (details.consumer_id?.trim()) lines.push(`Consumer/RR No.: ${details.consumer_id.trim()}`);
+  if (details.description?.trim()) lines.push(`Additional context: ${details.description.trim()}`);
+  if (lines.length === 0) return "";
+  return `\n\nCitizen-provided details:\n${lines.map((l) => `• ${l}`).join("\n")}`;
 }
