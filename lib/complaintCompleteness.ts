@@ -99,7 +99,7 @@ export function assessComplaintCompleteness(params: AssessParams): CompletenessR
   fields.push({
     id: "location",
     label: "Pinned map location",
-    fillHint: "Drop a pin on the map in Step 2 using GPS, photo EXIF, or by dragging the marker.",
+    fillHint: "Pin the issue on the map in the review step using GPS, photo EXIF, or by dragging the marker.",
     completed: Boolean(params.location?.lat && params.location?.lng),
     weight: 20,
   });
@@ -107,7 +107,7 @@ export function assessComplaintCompleteness(params: AssessParams): CompletenessR
   fields.push({
     id: "ward",
     label: "Ward & locality",
-    fillHint: "Confirm ward and locality on the map in Step 2 so the right BBMP zone crew is dispatched.",
+    fillHint: "Confirm ward and locality by pinning the location on the map in the review step.",
     completed: wardConfirmed(params.location),
     weight: 15,
   });

@@ -114,7 +114,7 @@ function canNavigateTo(
   maxReached: Step,
   isAnalyzing: boolean
 ): boolean {
-  if (target === current || isAnalyzing) return false;
+  if (target === current || isAnalyzing || target === 2) return false;
   return target <= maxReached;
 }
 
@@ -131,7 +131,7 @@ function StepIndicator({
 }) {
   const steps = [
     { num: 1 as Step, label: "Describe" },
-    { num: 2 as Step, label: "Locate" },
+    { num: 2 as Step, label: "AI Analysis" },
     { num: 3 as Step, label: "Review" },
     { num: 4 as Step, label: "Submit" },
   ];
@@ -234,6 +234,7 @@ export default function Home() {
   const [maxStepReached, setMaxStepReached] = useState<Step>(1);
   const [routingUpdated, setRoutingUpdated] = useState(false);
   const lastAutoRoutedSummary = useRef<string | null>(null);
+  const locationSectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setComplaints(getComplaintHistory());
@@ -321,18 +322,32 @@ export default function Home() {
   ]);
 
   const handleFixCompletenessField = (fieldId: string) => {
-    if (fieldId === "location" || fieldId === "ward") goToStep(2);
-    else if (fieldId === "description") goToStep(1);
-  };
-
-  const handleContinueToLocation = () => {
-    if (!grievanceText.trim() || grievanceText.trim().length < 10) {
-      setAnalysisError("Please describe your grievance in at least 10 characters.");
+    if (fieldId === "description") {
+      goToStep(1);
       return;
     }
-    setAnalysisError(null);
-    setStep(2);
-    setMaxStepReached((m) => (m < 2 ? 2 : m));
+    if (fieldId === "location" || fieldId === "ward") {
+      locationSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  const handleReviewLocationChange = (loc: LocationData) => {
+    setLocation(loc);
+    setAnalysisResult((prev) =>
+      prev
+        ? {
+            ...prev,
+            location: {
+              ...prev.location,
+              latitude: loc.lat,
+              longitude: loc.lng,
+              ward: loc.ward || prev.location.ward,
+              zone: loc.zone || prev.location.zone,
+              locality: loc.locality || prev.location.locality,
+            },
+          }
+        : null
+    );
   };
 
   const applyDepartmentSelection = (localDepts: string[]) => {
@@ -360,12 +375,10 @@ export default function Home() {
       setAnalysisError("Please describe your grievance in at least 10 characters.");
       return;
     }
-    if (!location) {
-      setAnalysisError("Please pinpoint the issue location on the map before continuing.");
-      return;
-    }
     setIsAnalyzing(true);
     setAnalysisError(null);
+    setStep(2);
+    setMaxStepReached((m) => (m < 2 ? 2 : m));
 
     try {
       const res = await fetch("/api/analyze-grievance", {
@@ -414,7 +427,7 @@ export default function Home() {
       setMaxStepReached((m) => (m < 3 ? 3 : m));
     } catch (err) {
       setAnalysisError(err instanceof Error ? err.message : "Unknown error occurred");
-      setStep(2);
+      setStep(1);
     } finally {
       setIsAnalyzing(false);
     }
@@ -438,8 +451,8 @@ export default function Home() {
           ? analysisResult.local_departments
           : [analysisResult.local_department],
         urgency: analysisResult.urgency,
-        ward: analysisResult.location.ward,
-        locality: analysisResult.location.locality,
+        ward: location?.ward || analysisResult.location.ward,
+        locality: location?.locality || analysisResult.location.locality,
       };
       setComplaints(saveComplaintToHistory(record));
     }
@@ -558,8 +571,8 @@ export default function Home() {
             )}
             {maxStepReached >= 3 && (
               <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700">
-                You returned to edit your complaint. Update your description, then continue through
-                location and analysis to refresh the AI summary.
+                You returned to edit your complaint. Update your description, then continue to
+                refresh the AI summary and pin the location on the review step.
               </div>
             )}
             {/* Complaint description */}
@@ -589,60 +602,8 @@ export default function Home() {
 
             <button
               type="button"
-              onClick={handleContinueToLocation}
-              disabled={!grievanceText.trim() || grievanceText.trim().length < 10}
-              className="w-full bg-[#1a3c6e] hover:bg-[#2563eb] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
-            >
-              Continue to Pin Location
-              <ChevronRight size={18} />
-            </button>
-          </div>
-        )}
-
-        {activeView === "file" && step === 2 && !isAnalyzing && (
-          <div className="space-y-4">
-            <StepBackButton
-              label="Back to Describe"
-              onClick={() => goToStep(1)}
-            />
-
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-              <div className="bg-slate-50 border-b border-slate-200 px-5 py-4">
-                <h3 className="font-semibold text-slate-800 text-sm">
-                  Pinpoint Location
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Mark the exact spot on the map. Use GPS, upload a photo, or drag the pin.
-                </p>
-              </div>
-              <div className="p-5">
-                <LocationPicker
-                  location={location}
-                  onLocationChange={setLocation}
-                  suggestedLocation={suggestedLocation}
-                />
-              </div>
-            </div>
-
-            {duplicate && !duplicateDismissed && (
-              <DuplicateBanner
-                match={duplicate}
-                onUpvote={(id) => console.log("Upvoted:", id)}
-                onDismiss={() => setDuplicateDismissed(true)}
-              />
-            )}
-
-            {analysisError && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2 text-red-700 text-sm">
-                <AlertCircle size={16} className="flex-shrink-0" />
-                {analysisError}
-              </div>
-            )}
-
-            <button
-              type="button"
               onClick={handleAnalyze}
-              disabled={!location || !grievanceText.trim()}
+              disabled={isAnalyzing || !grievanceText.trim() || grievanceText.trim().length < 10}
               className="w-full bg-[#1a3c6e] hover:bg-[#2563eb] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
             >
               <Sparkles size={18} />
@@ -685,8 +646,8 @@ export default function Home() {
         {activeView === "file" && step === 3 && analysisResult && (
           <div className="space-y-5">
             <StepBackButton
-              label="Back to Pin Location"
-              onClick={() => goToStep(2)}
+              label="Back to Describe"
+              onClick={() => goToStep(1)}
             />
 
             {completenessReport && (
@@ -796,20 +757,37 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Location confirmed */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-              <h3 className="font-semibold text-slate-700 text-sm mb-3 flex items-center gap-2">
-                <MapPin size={16} className="text-blue-500" />
-                Location Confirmed
-              </h3>
-              <div className="grid grid-cols-2 gap-3">
-                <InfoRow label="Ward" value={analysisResult.location.ward} />
-                <InfoRow label="Zone" value={analysisResult.location.zone} />
-                <InfoRow label="Locality" value={analysisResult.location.locality} />
-                <InfoRow
-                  label="Coordinates"
-                  value={`${analysisResult.location.latitude.toFixed(4)}°N, ${analysisResult.location.longitude.toFixed(4)}°E`}
+            {/* Pinpoint location — part of review step */}
+            <div
+              ref={locationSectionRef}
+              className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+            >
+              <div className="bg-slate-50 border-b border-slate-200 px-5 py-4">
+                <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                  <MapPin size={16} className="text-blue-500" />
+                  Pinpoint Location
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Mark the exact issue spot on the map. Use GPS, upload a photo, or drag the pin.
+                </p>
+              </div>
+              <div className="p-5">
+                <LocationPicker
+                  location={location}
+                  onLocationChange={handleReviewLocationChange}
+                  suggestedLocation={suggestedLocation}
                 />
+                {location && (
+                  <div className="grid grid-cols-2 gap-3 mt-4">
+                    <InfoRow label="Ward" value={location.ward || analysisResult.location.ward} />
+                    <InfoRow label="Zone" value={location.zone || analysisResult.location.zone} />
+                    <InfoRow label="Locality" value={location.locality || analysisResult.location.locality} />
+                    <InfoRow
+                      label="Coordinates"
+                      value={`${location.lat.toFixed(4)}°N, ${location.lng.toFixed(4)}°E`}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -825,7 +803,7 @@ export default function Home() {
             {/* Action buttons */}
             <div className="flex gap-3">
               <button
-                onClick={() => goToStep(2)}
+                onClick={() => goToStep(1)}
                 className="flex items-center gap-2 px-5 py-3 border-2 border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-medium transition-colors"
               >
                 <ChevronLeft size={16} />
@@ -833,7 +811,7 @@ export default function Home() {
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={isSubmitting || selectedLocalDepartments.length === 0}
+                disabled={isSubmitting || selectedLocalDepartments.length === 0 || !location}
                 className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white font-bold py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
