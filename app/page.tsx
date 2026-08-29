@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import Header from "@/components/Header";
 import VoiceTextRecorder from "@/components/VoiceTextRecorder";
-import AdvisoryCard from "@/components/AdvisoryCard";
 import DuplicateBanner from "@/components/DuplicateBanner";
 import ComplaintHistory from "@/components/ComplaintHistory";
+import CompletenessCard from "@/components/CompletenessCard";
 import DepartmentSelector from "@/components/DepartmentSelector";
+import { assessComplaintCompleteness } from "@/lib/complaintCompleteness";
 import {
   LOCAL_DEPARTMENTS,
   CPGRAMS_MINISTRIES,
@@ -107,30 +108,37 @@ function findDuplicate(
   return null;
 }
 
-function canNavigateTo(target: Step, current: Step, maxReached: Step): boolean {
-  if (target === 2 || target === current) return false;
+function canNavigateTo(
+  target: Step,
+  current: Step,
+  maxReached: Step,
+  isAnalyzing: boolean
+): boolean {
+  if (target === current || isAnalyzing) return false;
   return target <= maxReached;
 }
 
 function StepIndicator({
   current,
   maxReached,
+  isAnalyzing,
   onStepClick,
 }: {
   current: Step;
   maxReached: Step;
+  isAnalyzing: boolean;
   onStepClick: (step: Step) => void;
 }) {
   const steps = [
-    { num: 1 as Step, label: "Describe & Locate" },
-    { num: 2 as Step, label: "AI Analysis" },
-    { num: 3 as Step, label: "Review & Edit" },
+    { num: 1 as Step, label: "Describe" },
+    { num: 2 as Step, label: "Locate" },
+    { num: 3 as Step, label: "Review" },
     { num: 4 as Step, label: "Submit" },
   ];
   return (
     <div className="flex items-center justify-center gap-0 mb-6">
       {steps.map((step, i) => {
-        const navigable = canNavigateTo(step.num, current, maxReached);
+        const navigable = canNavigateTo(step.num, current, maxReached, isAnalyzing);
         return (
           <div key={step.num} className="flex items-center">
             <div className="flex flex-col items-center">
@@ -141,8 +149,8 @@ function StepIndicator({
                 title={
                   navigable
                     ? `Go back to ${step.label}`
-                    : step.num === 2
-                    ? "AI analysis runs automatically"
+                    : isAnalyzing
+                    ? "Please wait for analysis to finish"
                     : undefined
                 }
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
@@ -288,10 +296,43 @@ export default function Home() {
   }, [editedSummary, step]);
 
   const goToStep = (target: Step) => {
-    if (!canNavigateTo(target, step, maxStepReached)) return;
+    if (!canNavigateTo(target, step, maxStepReached, isAnalyzing)) return;
     if (step === 4) setSubmittedId(null);
     setIsAnalyzing(false);
     setStep(target);
+  };
+
+  const completenessReport = useMemo(() => {
+    if (!analysisResult) return null;
+    return assessComplaintCompleteness({
+      grievanceText,
+      editedSummary,
+      location,
+      selectedLocalDepartments,
+      aiMissing: analysisResult.missing_details_advisory.is_missing,
+      aiObservation: analysisResult.missing_details_advisory.observation,
+    });
+  }, [
+    grievanceText,
+    editedSummary,
+    location,
+    selectedLocalDepartments,
+    analysisResult,
+  ]);
+
+  const handleFixCompletenessField = (fieldId: string) => {
+    if (fieldId === "location" || fieldId === "ward") goToStep(2);
+    else if (fieldId === "description" || fieldId === "landmark" || fieldId === "timeline") goToStep(1);
+  };
+
+  const handleContinueToLocation = () => {
+    if (!grievanceText.trim() || grievanceText.trim().length < 10) {
+      setAnalysisError("Please describe your grievance in at least 10 characters.");
+      return;
+    }
+    setAnalysisError(null);
+    setStep(2);
+    setMaxStepReached((m) => (m < 2 ? 2 : m));
   };
 
   const applyDepartmentSelection = (localDepts: string[]) => {
@@ -319,9 +360,12 @@ export default function Home() {
       setAnalysisError("Please describe your grievance in at least 10 characters.");
       return;
     }
+    if (!location) {
+      setAnalysisError("Please pinpoint the issue location on the map before continuing.");
+      return;
+    }
     setIsAnalyzing(true);
     setAnalysisError(null);
-    setStep(2);
 
     try {
       const res = await fetch("/api/analyze-grievance", {
@@ -370,7 +414,7 @@ export default function Home() {
       setMaxStepReached((m) => (m < 3 ? 3 : m));
     } catch (err) {
       setAnalysisError(err instanceof Error ? err.message : "Unknown error occurred");
-      setStep(1);
+      setStep(2);
     } finally {
       setIsAnalyzing(false);
     }
@@ -458,6 +502,7 @@ export default function Home() {
           <StepIndicator
             current={step}
             maxReached={maxStepReached}
+            isAnalyzing={isAnalyzing}
             onStepClick={goToStep}
           />
         )}
@@ -507,14 +552,14 @@ export default function Home() {
           <div className="space-y-4">
             {maxStepReached >= 3 && (
               <StepBackButton
-                label="Back to Review & Edit"
+                label="Back to Review"
                 onClick={() => goToStep(3)}
               />
             )}
             {maxStepReached >= 3 && (
               <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700">
-                You returned to edit your complaint. Update the description or location, then tap{" "}
-                <strong>Continue</strong> to refresh the AI analysis.
+                You returned to edit your complaint. Update your description, then continue through
+                location and analysis to refresh the AI summary.
               </div>
             )}
             {/* Complaint description */}
@@ -524,7 +569,7 @@ export default function Home() {
                   Describe Your Grievance
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Type or tap the microphone to speak. Include location landmarks and issue details.
+                  Type or tap the microphone to speak. Include issue details and any landmarks you know.
                 </p>
               </div>
               <div className="p-5">
@@ -542,14 +587,32 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Location */}
+            <button
+              type="button"
+              onClick={handleContinueToLocation}
+              disabled={!grievanceText.trim() || grievanceText.trim().length < 10}
+              className="w-full bg-[#1a3c6e] hover:bg-[#2563eb] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+            >
+              Continue to Pin Location
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        )}
+
+        {activeView === "file" && step === 2 && !isAnalyzing && (
+          <div className="space-y-4">
+            <StepBackButton
+              label="Back to Describe"
+              onClick={() => goToStep(1)}
+            />
+
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="bg-slate-50 border-b border-slate-200 px-5 py-4">
                 <h3 className="font-semibold text-slate-800 text-sm">
                   Pinpoint Location
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Use GPS, upload a photo, or drag the pin on the map to mark the exact spot.
+                  Mark the exact spot on the map. Use GPS, upload a photo, or drag the pin.
                 </p>
               </div>
               <div className="p-5">
@@ -561,7 +624,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Duplicate banner */}
             {duplicate && !duplicateDismissed && (
               <DuplicateBanner
                 match={duplicate}
@@ -570,10 +632,17 @@ export default function Home() {
               />
             )}
 
+            {analysisError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2 text-red-700 text-sm">
+                <AlertCircle size={16} className="flex-shrink-0" />
+                {analysisError}
+              </div>
+            )}
+
             <button
               type="button"
               onClick={handleAnalyze}
-              disabled={isAnalyzing || !grievanceText.trim() || grievanceText.trim().length < 10}
+              disabled={!location || !grievanceText.trim()}
               className="w-full bg-[#1a3c6e] hover:bg-[#2563eb] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
             >
               <Sparkles size={18} />
@@ -616,9 +685,17 @@ export default function Home() {
         {activeView === "file" && step === 3 && analysisResult && (
           <div className="space-y-5">
             <StepBackButton
-              label="Back to Describe & Locate"
-              onClick={() => goToStep(1)}
+              label="Back to Pin Location"
+              onClick={() => goToStep(2)}
             />
+
+            {completenessReport && (
+              <CompletenessCard
+                report={completenessReport}
+                onFixField={handleFixCompletenessField}
+              />
+            )}
+
             {/* AI Analysis header */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
               <div className="flex items-center justify-between mb-4">
@@ -736,14 +813,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Advisory card */}
-            {analysisResult.missing_details_advisory.is_missing && (
-              <AdvisoryCard
-                observation={analysisResult.missing_details_advisory.observation}
-                whyItMatters={analysisResult.missing_details_advisory.why_it_matters}
-              />
-            )}
-
             {/* Duplicate banner */}
             {duplicate && !duplicateDismissed && (
               <DuplicateBanner
@@ -756,7 +825,7 @@ export default function Home() {
             {/* Action buttons */}
             <div className="flex gap-3">
               <button
-                onClick={() => goToStep(1)}
+                onClick={() => goToStep(2)}
                 className="flex items-center gap-2 px-5 py-3 border-2 border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-medium transition-colors"
               >
                 <ChevronLeft size={16} />
