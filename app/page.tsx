@@ -38,6 +38,7 @@ import {
   loadCitizenSession,
   clearCitizenSession,
 } from "@/lib/citizenAuth";
+import { redirectToLogin } from "@/lib/authRedirect";
 import {
   SEED_GRIEVANCES,
   SeedGrievance,
@@ -234,7 +235,7 @@ function HomeContent() {
   const router = useRouter();
   const { language, setLanguage, t } = useLanguage();
   const [citizen, setCitizen] = useState<CitizenSession | null>(null);
-  const [authReady, setAuthReady] = useState(false);
+  const [authStatus, setAuthStatus] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
   const [activeView, setActiveView] = useState<ActiveView>("file");
   const [step, setStep] = useState<Step>(1);
   const [grievanceText, setGrievanceText] = useState("");
@@ -375,25 +376,31 @@ function HomeContent() {
   const handleLogout = () => {
     clearCitizenSession();
     setCitizen(null);
-    router.replace("/login");
+    setAuthStatus("unauthenticated");
+    redirectToLogin(router);
   };
 
   useEffect(() => {
     const session = loadCitizenSession();
-    if (!session) {
-      router.replace("/login");
+    if (!session?.mobile) {
+      setAuthStatus("unauthenticated");
       return;
     }
     setCitizen(session);
-    setAuthReady(true);
-  }, [router]);
+    setAuthStatus("authenticated");
+  }, []);
 
   useEffect(() => {
-    if (!authReady || !ownerId) return;
+    if (authStatus !== "unauthenticated") return;
+    redirectToLogin(router);
+  }, [authStatus, router]);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated" || !ownerId) return;
     setComplaints(getComplaintHistory(ownerId));
     refreshSavedDraft();
     draftReadyRef.current = true;
-  }, [authReady, ownerId, refreshSavedDraft]);
+  }, [authStatus, ownerId, refreshSavedDraft]);
 
   useEffect(() => {
     const update = () => setIsOnline(navigator.onLine);
@@ -909,10 +916,20 @@ function HomeContent() {
     scrollContentToTop();
   };
 
-  if (!authReady || !citizen) {
+  if (authStatus === "loading") {
     return (
-      <div className="h-dvh flex items-center justify-center bg-slate-100">
+      <div className="h-dvh flex flex-col items-center justify-center bg-slate-100 gap-3">
         <Loader2 className="animate-spin text-[#1a3c6e]" size={28} />
+        <p className="text-sm text-slate-600">Loading portal…</p>
+      </div>
+    );
+  }
+
+  if (authStatus === "unauthenticated" || !citizen) {
+    return (
+      <div className="h-dvh flex flex-col items-center justify-center bg-slate-100 gap-3">
+        <Loader2 className="animate-spin text-[#1a3c6e]" size={28} />
+        <p className="text-sm text-slate-600">Redirecting to login…</p>
       </div>
     );
   }

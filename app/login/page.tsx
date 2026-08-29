@@ -11,6 +11,7 @@ import {
   saveCitizenSession,
   verifyDemoOtp,
 } from "@/lib/citizenAuth";
+import { redirectToHome } from "@/lib/authRedirect";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,8 +23,9 @@ export default function LoginPage() {
   const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
-    if (loadCitizenSession()) {
-      router.replace("/");
+    const session = loadCitizenSession();
+    if (session?.mobile) {
+      redirectToHome(router);
       return;
     }
     setCheckingSession(false);
@@ -66,8 +68,9 @@ export default function LoginPage() {
 
   if (checkingSession) {
     return (
-      <div className="h-dvh flex items-center justify-center bg-slate-100">
+      <div className="h-dvh flex flex-col items-center justify-center bg-slate-100 gap-3">
         <Loader2 className="animate-spin text-[#1a3c6e]" size={28} />
+        <p className="text-sm text-slate-600">Checking session…</p>
       </div>
     );
   }
